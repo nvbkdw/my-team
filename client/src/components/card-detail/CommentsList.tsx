@@ -6,6 +6,7 @@ import type { CardComment } from '../../types/models.js';
 import WorkerStatusBadge from './WorkerStatusBadge.js';
 import StreamingIndicator from './StreamingIndicator.js';
 import Button from '../ui/Button.js';
+import MarkdownContent from '../ui/MarkdownContent.js';
 import { cn } from '../../utils/cn.js';
 
 interface CommentsListProps {
@@ -129,14 +130,15 @@ export default function CommentsList({ cardId }: CommentsListProps) {
   const inputDisabled = streaming || submitting;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col flex-1 min-h-0 border-t border-gray-200">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-3 pb-2">
         <h4 className="text-sm font-medium text-gray-700">Comments</h4>
         {hasWorker && <WorkerStatusBadge cardId={cardId} />}
       </div>
 
-      {/* Comments list */}
-      <div ref={scrollRef} className="max-h-80 overflow-y-auto space-y-3">
+      {/* Comments list — scrollable */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-6 space-y-3">
         {comments.length === 0 && !streaming && (
           <p className="text-xs text-gray-400">No comments yet</p>
         )}
@@ -167,9 +169,7 @@ export default function CommentsList({ cardId }: CommentsListProps) {
                 )}
               </div>
             </div>
-            <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
-              {comment.body}
-            </p>
+            <MarkdownContent className="mt-1">{comment.body}</MarkdownContent>
           </div>
         ))}
 
@@ -180,9 +180,7 @@ export default function CommentsList({ cardId }: CommentsListProps) {
               <span className="text-xs font-medium text-gray-600">claude</span>
             </div>
             {streamingText ? (
-              <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
-                {streamingText}
-              </p>
+              <MarkdownContent className="mt-1">{streamingText}</MarkdownContent>
             ) : (
               <StreamingIndicator />
             )}
@@ -190,8 +188,8 @@ export default function CommentsList({ cardId }: CommentsListProps) {
         )}
       </div>
 
-      {/* Input area */}
-      <div className="flex gap-2">
+      {/* Input area — pinned at bottom */}
+      <div className="flex gap-2 px-6 py-3 border-t border-gray-100">
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}

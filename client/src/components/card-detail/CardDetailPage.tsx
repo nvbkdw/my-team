@@ -29,7 +29,7 @@ export default function CardDetailPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel — details */}
-        <div className="w-2/5 min-w-[320px] overflow-y-auto border-r border-gray-200">
+        <div className="w-2/5 min-w-[320px] flex flex-col border-r border-gray-200">
           <DetailsTab card={card} />
         </div>
 
