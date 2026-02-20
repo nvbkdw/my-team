@@ -77,7 +77,7 @@ export default function LabelManager({ cardId }: LabelManagerProps) {
         {!showAdd && (
           <button
             onClick={() => setShowAdd(true)}
-            className="text-xs text-indigo-600 hover:underline"
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             + Add label
           </button>
@@ -90,7 +90,7 @@ export default function LabelManager({ cardId }: LabelManagerProps) {
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="Label name"
-            className="rounded border border-gray-300 px-2 py-1 text-xs w-24 focus:border-indigo-500 focus:outline-none"
+            className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 text-xs w-24 focus:border-indigo-500 focus:outline-none"
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           />
           <div className="flex gap-1">

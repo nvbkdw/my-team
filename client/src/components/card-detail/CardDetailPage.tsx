@@ -24,17 +24,17 @@ export default function CardDetailPage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full flex-col bg-white dark:bg-gray-900">
       <CardDetailHeader card={card} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel — details */}
-        <div className="w-2/5 min-w-[320px] flex flex-col border-r border-gray-200">
+        <div className="w-2/5 min-w-[320px] flex flex-col border-r border-gray-200 dark:border-gray-700">
           <DetailsTab card={card} />
         </div>
 
         {/* Right panel — branch diff */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
           <PRDiffPanel
             cardId={card.id}
             prNumber={card.pr_number}

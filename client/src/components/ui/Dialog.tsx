@@ -48,7 +48,7 @@ export default function Dialog({ open, onClose, title, children, className }: Di
       <div
         ref={panelRef}
         className={cn(
-          'relative z-10 w-full max-w-lg rounded-xl bg-white shadow-2xl',
+          'relative z-10 w-full max-w-lg rounded-xl bg-white dark:bg-gray-900 shadow-2xl',
           'animate-[slideIn_200ms_ease-out]',
           className,
         )}
@@ -57,11 +57,11 @@ export default function Dialog({ open, onClose, title, children, className }: Di
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="rounded-md p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

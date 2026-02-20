@@ -14,10 +14,10 @@ interface KanbanColumnProps {
 }
 
 const columnHeaderColors: Record<CardStatus, string> = {
-  backlog: 'text-gray-600',
-  priority: 'text-amber-600',
-  in_progress: 'text-blue-600',
-  done: 'text-green-600',
+  backlog: 'text-gray-600 dark:text-gray-400',
+  priority: 'text-amber-600 dark:text-amber-400',
+  in_progress: 'text-blue-600 dark:text-blue-400',
+  done: 'text-green-600 dark:text-green-400',
 };
 
 const columnDotColors: Record<CardStatus, string> = {
@@ -36,9 +36,9 @@ export default function KanbanColumn({ status, title, cards }: KanbanColumnProps
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col rounded-xl bg-gray-100/80 min-h-[calc(100vh-8rem)]',
+        'flex flex-col rounded-xl bg-gray-100/80 dark:bg-gray-800/80 min-h-[calc(100vh-8rem)]',
         'w-full min-w-[260px]',
-        isOver && 'ring-2 ring-indigo-300 bg-indigo-50/40',
+        isOver && 'ring-2 ring-indigo-300 dark:ring-indigo-600 bg-indigo-50/40 dark:bg-indigo-900/40',
       )}
     >
       {/* Column header */}
@@ -54,7 +54,7 @@ export default function KanbanColumn({ status, title, cards }: KanbanColumnProps
         >
           {title}
         </h3>
-        <span className="ml-auto rounded-full bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+        <span className="ml-auto rounded-full bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300">
           {cards.length}
         </span>
       </div>
@@ -68,7 +68,7 @@ export default function KanbanColumn({ status, title, cards }: KanbanColumnProps
         </SortableContext>
 
         {cards.length === 0 && (
-          <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-gray-300 py-8 text-xs text-gray-400">
+          <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 py-8 text-xs text-gray-400 dark:text-gray-500">
             Drop cards here
           </div>
         )}

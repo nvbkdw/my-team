@@ -6,7 +6,7 @@ export default function BoardHeader() {
 
   return (
     <div className="flex items-center justify-between px-6 py-4">
-      <h1 className="text-xl font-bold text-gray-900">My Team</h1>
+      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">My Team</h1>
       <Button variant="primary" size="md" onClick={openNewCardDialog}>
         <svg
           xmlns="http://www.w3.org/2000/svg"

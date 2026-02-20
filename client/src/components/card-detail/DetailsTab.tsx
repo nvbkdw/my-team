@@ -29,7 +29,7 @@ export default function DetailsTab({ card }: DetailsTabProps) {
       <div className="overflow-y-auto p-6 space-y-6">
         {/* Labels */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
             Labels
           </label>
           <LabelManager cardId={card.id} />
@@ -37,7 +37,7 @@ export default function DetailsTab({ card }: DetailsTabProps) {
 
         {/* Description */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
             Description
           </label>
           <textarea
@@ -46,13 +46,13 @@ export default function DetailsTab({ card }: DetailsTabProps) {
             onBlur={handleDescriptionSave}
             placeholder="Add a description..."
             rows={5}
-            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
           />
         </div>
 
         {/* Branch info */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
             Branch
           </label>
           <BranchInfo card={card} />

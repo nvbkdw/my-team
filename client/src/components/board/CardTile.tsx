@@ -46,17 +46,17 @@ export default function CardTile({ card }: CardTileProps) {
       {...listeners}
       onClick={() => selectCard(card.id)}
       className={cn(
-        'cursor-pointer rounded-lg border-l-[3px] bg-white p-3 shadow-sm',
+        'cursor-pointer rounded-lg border-l-[3px] bg-white dark:bg-gray-900 p-3 shadow-sm dark:shadow-gray-950/40',
         'hover:shadow-md transition-shadow',
         statusBorderColors[card.status] || 'border-l-gray-300',
         isDragging && 'opacity-50 shadow-lg',
       )}
     >
-      <p className="text-sm font-medium text-gray-900 leading-snug">
+      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-snug">
         {card.title}
       </p>
       {card.description && (
-        <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
           {card.description}
         </p>
       )}
@@ -75,7 +75,7 @@ export default function CardTile({ card }: CardTileProps) {
             />
             <path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" />
           </svg>
-          <span className="text-xs text-gray-400">{repo.name}</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{repo.name}</span>
         </div>
       )}
     </div>

@@ -6,7 +6,7 @@ export default function StreamingIndicator() {
         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:150ms]" />
         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:300ms]" />
       </div>
-      <span className="text-xs text-gray-500">Claude is thinking...</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400">Claude is thinking...</span>
     </div>
   );
 }

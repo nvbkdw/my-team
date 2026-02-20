@@ -31,7 +31,7 @@ export default function RepoList() {
             onClick={() =>
               setExpandedId(expandedId === repo.id ? null : repo.id)
             }
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -50,7 +50,7 @@ export default function RepoList() {
           </button>
 
           {expandedId === repo.id && (
-            <div className="ml-7 mt-1 space-y-1 text-xs text-gray-500 pb-1">
+            <div className="ml-7 mt-1 space-y-1 text-xs text-gray-500 dark:text-gray-400 pb-1">
               <p className="truncate" title={repo.local_path}>
                 {repo.local_path}
               </p>

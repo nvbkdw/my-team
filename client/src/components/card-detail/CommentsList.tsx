@@ -14,9 +14,9 @@ interface CommentsListProps {
 }
 
 const authorStyles = {
-  user: 'bg-white border-gray-200',
-  claude: 'bg-indigo-50 border-indigo-200',
-  system: 'bg-amber-50 border-amber-200',
+  user: 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700',
+  claude: 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800',
+  system: 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800',
 };
 
 export default function CommentsList({ cardId }: CommentsListProps) {
@@ -130,10 +130,10 @@ export default function CommentsList({ cardId }: CommentsListProps) {
   const inputDisabled = streaming || submitting;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 border-t border-gray-200">
+    <div className="flex flex-col flex-1 min-h-0 border-t border-gray-200 dark:border-gray-700">
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-3 pb-2">
-        <h4 className="text-sm font-medium text-gray-700">Comments</h4>
+        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Comments</h4>
         {hasWorker && <WorkerStatusBadge cardId={cardId} />}
       </div>
 
@@ -152,11 +152,11 @@ export default function CommentsList({ cardId }: CommentsListProps) {
             )}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600 capitalize">
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400 capitalize">
                 {comment.author}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400">
+                <span className="text-[10px] text-gray-400 dark:text-gray-500">
                   {new Date(comment.created_at).toLocaleString()}
                 </span>
                 {comment.author === 'user' && !comment.id.startsWith('optimistic-') && (
@@ -177,7 +177,7 @@ export default function CommentsList({ cardId }: CommentsListProps) {
         {streaming && (
           <div className={cn('rounded-lg border p-3', authorStyles.claude)}>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600">claude</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">claude</span>
             </div>
             {streamingText ? (
               <MarkdownContent className="mt-1">{streamingText}</MarkdownContent>
@@ -189,7 +189,7 @@ export default function CommentsList({ cardId }: CommentsListProps) {
       </div>
 
       {/* Input area — pinned at bottom */}
-      <div className="flex gap-2 px-6 py-3 border-t border-gray-100">
+      <div className="flex gap-2 px-6 py-3 border-t border-gray-100 dark:border-gray-800">
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
@@ -198,8 +198,8 @@ export default function CommentsList({ cardId }: CommentsListProps) {
           rows={2}
           disabled={inputDisabled}
           className={cn(
-            'flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none',
-            inputDisabled && 'bg-gray-50 text-gray-400 cursor-not-allowed',
+            'flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none',
+            inputDisabled && 'bg-gray-50 dark:bg-gray-900 text-gray-400 cursor-not-allowed',
           )}
         />
         {streaming ? (

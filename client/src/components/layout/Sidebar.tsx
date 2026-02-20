@@ -7,16 +7,18 @@ export default function Sidebar() {
   const openSettings = useUiStore((s) => s.openSettings);
   const collapsed = useUiStore((s) => s.isSidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const isDarkMode = useUiStore((s) => s.isDarkMode);
+  const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-r border-gray-200 bg-white overflow-hidden transition-[width] duration-200 ease-in-out ${
+      className={`flex shrink-0 flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden transition-[width] duration-200 ease-in-out ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
       {/* Header */}
       <div
-        className={`flex items-center border-b border-gray-200 ${
+        className={`flex items-center border-b border-gray-200 dark:border-gray-700 ${
           collapsed ? 'flex-col gap-2 px-2 py-3' : 'gap-2 px-4 py-4'
         }`}
       >
@@ -24,13 +26,13 @@ export default function Sidebar() {
           MT
         </div>
         {!collapsed && (
-          <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900 truncate">
+          <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
             My Team
           </span>
         )}
         <button
           onClick={toggleSidebar}
-          className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          className="shrink-0 rounded-md p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <svg
@@ -52,7 +54,7 @@ export default function Sidebar() {
       {!collapsed ? (
         <div className="flex-1 overflow-y-auto px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
               Repos
             </span>
             <Button variant="ghost" size="sm" onClick={openAddRepoDialog}>
@@ -76,7 +78,7 @@ export default function Sidebar() {
         <div className="flex flex-1 flex-col items-center gap-2 py-3">
           <button
             onClick={openAddRepoDialog}
-            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="rounded-md p-2 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             title="Add repo"
           >
             <svg
@@ -95,13 +97,48 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* Settings button */}
+      {/* Bottom actions */}
       <div
-        className={`border-t border-gray-200 ${collapsed ? 'flex justify-center px-2 py-3' : 'px-3 py-3'}`}
+        className={`border-t border-gray-200 dark:border-gray-700 ${collapsed ? 'flex flex-col items-center gap-1 px-2 py-3' : 'px-3 py-3 space-y-1'}`}
       >
+        {/* Dark mode toggle */}
+        <button
+          onClick={toggleDarkMode}
+          className={`flex items-center rounded-md text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+            collapsed ? 'p-2' : 'w-full gap-2 px-2 py-1.5'
+          }`}
+          title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDarkMode ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 shrink-0"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                clipRule="evenodd"
+              />
+            </svg>
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 shrink-0"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+            </svg>
+          )}
+          {!collapsed && (isDarkMode ? 'Light mode' : 'Dark mode')}
+        </button>
+
+        {/* Settings button */}
         <button
           onClick={openSettings}
-          className={`flex items-center rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors ${
+          className={`flex items-center rounded-md text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
             collapsed ? 'p-2' : 'w-full gap-2 px-2 py-1.5'
           }`}
           title="Settings"

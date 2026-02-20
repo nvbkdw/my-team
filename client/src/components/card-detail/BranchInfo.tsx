@@ -24,11 +24,11 @@ export default function BranchInfo({ card }: BranchInfoProps) {
 
   if (card.branch_name) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3">
         <div className="flex items-center gap-2">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4 text-gray-500"
+            className="h-4 w-4 text-gray-500 dark:text-gray-400"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -38,7 +38,7 @@ export default function BranchInfo({ card }: BranchInfoProps) {
               clipRule="evenodd"
             />
           </svg>
-          <code className="text-sm font-mono text-gray-700">
+          <code className="text-sm font-mono text-gray-700 dark:text-gray-300">
             {card.branch_name}
           </code>
         </div>
@@ -109,7 +109,7 @@ export default function BranchInfo({ card }: BranchInfoProps) {
   };
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3 space-y-3">
       <Input
         label="Branch Name"
         value={branchName}

@@ -5,6 +5,7 @@ import '@git-diff-view/react/styles/diff-view.css';
 import { fetchBranchDiff, type BranchDiffFile } from '../../api/cards.js';
 import * as prApi from '../../api/pr.js';
 import type { PRData } from '../../api/pr.js';
+import { useUiStore } from '../../stores/uiStore.js';
 import Badge from '../ui/Badge.js';
 import Button from '../ui/Button.js';
 import Spinner from '../ui/Spinner.js';
@@ -98,7 +99,7 @@ function FileNav({
         <div key={node.path}>
           <button
             onClick={() => toggle(node.path)}
-            className="flex w-full items-center gap-1 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100 rounded"
+            className="flex w-full items-center gap-1 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
             style={{ paddingLeft: depth * 12 + 8 }}
           >
             <svg
@@ -131,8 +132,8 @@ function FileNav({
         className={cn(
           'flex w-full items-center gap-1.5 px-2 py-0.5 text-xs rounded',
           activeFile === node.path
-            ? 'bg-indigo-50 text-indigo-700'
-            : 'text-gray-700 hover:bg-gray-100',
+            ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'
+            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
         )}
         style={{ paddingLeft: depth * 12 + 8 }}
         title={node.path}
@@ -166,6 +167,7 @@ function FileDiff({
   diffMode: DiffModeEnum;
   scrollRef: (el: HTMLDivElement | null) => void;
 }) {
+  const isDarkMode = useUiStore((s) => s.isDarkMode);
   const lang = getFileLang(file.filename);
 
   const diffFileInstance = useMemo(() => {
@@ -187,8 +189,8 @@ function FileDiff({
     'text-gray-600';
 
   return (
-    <div ref={scrollRef} className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="bg-gray-50 px-3 py-1.5 text-xs font-mono text-gray-600 border-b border-gray-200 flex items-center gap-2 sticky top-0 z-[1]">
+    <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="bg-gray-50 dark:bg-gray-800 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 sticky top-0 z-[1]">
         <span className={statusColor}>
           {file.status === 'added' ? '+' : file.status === 'removed' ? '-' : '~'}
         </span>
@@ -199,7 +201,7 @@ function FileDiff({
           className="text-[13px]"
           diffFile={diffFileInstance}
           diffViewMode={diffMode}
-          diffViewTheme="light"
+          diffViewTheme={isDarkMode ? 'dark' : 'light'}
           diffViewHighlight
           diffViewWrap
           diffViewFontSize={13}
@@ -217,6 +219,7 @@ function FileDiff({
 // ── Main panel ────────────────────────────────────────────
 
 export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }: PRDiffPanelProps) {
+  const isDarkMode = useUiStore((s) => s.isDarkMode);
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
   const [baseBranch, setBaseBranch] = useState('main');
   const [currentBranch, setCurrentBranch] = useState('');
@@ -308,14 +311,14 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
   return (
     <div className="flex h-full flex-col">
       {/* Header bar */}
-      <div className="shrink-0 border-b border-gray-200 px-4 py-3 bg-white">
+      <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 px-4 py-3 bg-white dark:bg-gray-900">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {currentBranch || branchName}
           </h3>
-          <span className="text-xs text-gray-400">vs</span>
-          <span className="text-xs font-mono text-gray-600">{baseBranch}</span>
-          <span className="ml-2 text-xs text-gray-500">
+          <span className="text-xs text-gray-400 dark:text-gray-500">vs</span>
+          <span className="text-xs font-mono text-gray-600 dark:text-gray-400">{baseBranch}</span>
+          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
             {files.length} file{files.length !== 1 ? 's' : ''} changed
           </span>
         </div>
@@ -323,13 +326,13 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
         <div className="mt-2 flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setSplitView(!splitView)}
-            className="text-xs text-indigo-600 hover:underline"
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             {splitView ? 'Unified view' : 'Split view'}
           </button>
           <button
             onClick={loadBranchDiff}
-            className="text-xs text-indigo-600 hover:underline"
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             Refresh
           </button>
@@ -350,7 +353,7 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
                   href={pr.html_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-indigo-600 hover:underline"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                 >
                   View on GitHub
                 </a>
@@ -375,8 +378,8 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
       <div className="flex flex-1 overflow-hidden">
         {/* File navigation sidebar */}
         {files.length > 0 && (
-          <div className="w-[220px] shrink-0 border-r border-gray-200 overflow-y-auto bg-white">
-            <div className="px-3 py-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+          <div className="w-[220px] shrink-0 border-r border-gray-200 dark:border-gray-700 overflow-y-auto bg-white dark:bg-gray-900">
+            <div className="px-3 py-2 text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800">
               Files
             </div>
             <FileNav

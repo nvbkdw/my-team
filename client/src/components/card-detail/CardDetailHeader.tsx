@@ -10,10 +10,10 @@ interface CardDetailHeaderProps {
 }
 
 const statusConfig: Record<CardStatus, { label: string; color: string }> = {
-  backlog: { label: 'Backlog', color: 'bg-gray-100 text-gray-700' },
-  priority: { label: 'Priority', color: 'bg-amber-100 text-amber-700' },
-  in_progress: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
-  done: { label: 'Done', color: 'bg-green-100 text-green-700' },
+  backlog: { label: 'Backlog', color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' },
+  priority: { label: 'Priority', color: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' },
+  in_progress: { label: 'In Progress', color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' },
+  done: { label: 'Done', color: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' },
 };
 
 const allStatuses: CardStatus[] = ['backlog', 'priority', 'in_progress', 'done'];
@@ -77,11 +77,11 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
   const cfg = statusConfig[card.status];
 
   return (
-    <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-3 bg-white">
+    <div className="flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 px-6 py-3 bg-white dark:bg-gray-900">
       {/* Back arrow */}
       <button
         onClick={closeCard}
-        className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+        className="rounded-md p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
         title="Back to board"
       >
         <svg
@@ -113,12 +113,12 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
                 setEditing(false);
               }
             }}
-            className="w-full rounded-md border border-indigo-300 px-2 py-1 text-lg font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full rounded-md border border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 px-2 py-1 text-lg font-semibold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         ) : (
           <h2
             onClick={() => setEditing(true)}
-            className="cursor-pointer truncate text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors"
+            className="cursor-pointer truncate text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
             title="Click to edit"
           >
             {card.title}
@@ -133,12 +133,12 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
         </button>
 
         {showStatusMenu && (
-          <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-lg">
             {allStatuses.map((s) => (
               <button
                 key={s}
                 onClick={() => handleStatusChange(s)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <span
                   className={`h-2 w-2 rounded-full ${
