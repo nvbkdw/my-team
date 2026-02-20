@@ -138,58 +138,62 @@ export default function CommentsList({ cardId }: CommentsListProps) {
       </div>
 
       {/* Comments list — scrollable */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-6 space-y-3">
-        {comments.length === 0 && !streaming && (
-          <p className="text-xs text-gray-400">No comments yet</p>
-        )}
+      <div className="relative flex-1 min-h-0">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-6 space-y-3 pb-6">
+          {comments.length === 0 && !streaming && (
+            <p className="text-xs text-gray-400">No comments yet</p>
+          )}
 
-        {comments.map((comment) => (
-          <div
-            key={comment.id}
-            className={cn(
-              'rounded-lg border p-3',
-              authorStyles[comment.author] || authorStyles.user,
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400 capitalize">
-                {comment.author}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                  {new Date(comment.created_at).toLocaleString()}
+          {comments.map((comment) => (
+            <div
+              key={comment.id}
+              className={cn(
+                'rounded-lg border p-3',
+                authorStyles[comment.author] || authorStyles.user,
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 capitalize">
+                  {comment.author}
                 </span>
-                {comment.author === 'user' && !comment.id.startsWith('optimistic-') && (
-                  <button
-                    onClick={() => handleDelete(comment.id)}
-                    className="text-[10px] text-red-400 hover:text-red-600"
-                  >
-                    delete
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                    {new Date(comment.created_at).toLocaleString()}
+                  </span>
+                  {comment.author === 'user' && !comment.id.startsWith('optimistic-') && (
+                    <button
+                      onClick={() => handleDelete(comment.id)}
+                      className="text-[10px] text-red-400 hover:text-red-600"
+                    >
+                      delete
+                    </button>
+                  )}
+                </div>
               </div>
+              <MarkdownContent className="mt-1">{comment.body}</MarkdownContent>
             </div>
-            <MarkdownContent className="mt-1">{comment.body}</MarkdownContent>
-          </div>
-        ))}
+          ))}
 
-        {/* Streaming Claude response bubble */}
-        {streaming && (
-          <div className={cn('rounded-lg border p-3', authorStyles.claude)}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">claude</span>
+          {/* Streaming Claude response bubble */}
+          {streaming && (
+            <div className={cn('rounded-lg border p-3', authorStyles.claude)}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">claude</span>
+              </div>
+              {streamingText ? (
+                <MarkdownContent className="mt-1">{streamingText}</MarkdownContent>
+              ) : (
+                <StreamingIndicator />
+              )}
             </div>
-            {streamingText ? (
-              <MarkdownContent className="mt-1">{streamingText}</MarkdownContent>
-            ) : (
-              <StreamingIndicator />
-            )}
-          </div>
-        )}
+          )}
+        </div>
+        {/* Fade overlay at bottom of scroll area */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white dark:from-gray-900 to-transparent" />
       </div>
 
       {/* Input area — pinned at bottom */}
-      <div className="flex gap-2 px-6 py-3 border-t border-gray-100 dark:border-gray-800">
+      <div className="flex gap-2 px-6 py-3">
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
