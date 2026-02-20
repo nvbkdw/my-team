@@ -5,6 +5,7 @@ interface UiState {
   isNewCardDialogOpen: boolean;
   isSettingsOpen: boolean;
   isAddRepoDialogOpen: boolean;
+  isSidebarCollapsed: boolean;
 
   selectCard: (id: string) => void;
   closeCard: () => void;
@@ -14,6 +15,7 @@ interface UiState {
   closeSettings: () => void;
   openAddRepoDialog: () => void;
   closeAddRepoDialog: () => void;
+  toggleSidebar: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -21,6 +23,7 @@ export const useUiStore = create<UiState>((set) => ({
   isNewCardDialogOpen: false,
   isSettingsOpen: false,
   isAddRepoDialogOpen: false,
+  isSidebarCollapsed: false,
 
   selectCard: (id) => set({ selectedCardId: id }),
   closeCard: () => set({ selectedCardId: null }),
@@ -30,4 +33,5 @@ export const useUiStore = create<UiState>((set) => ({
   closeSettings: () => set({ isSettingsOpen: false }),
   openAddRepoDialog: () => set({ isAddRepoDialogOpen: true }),
   closeAddRepoDialog: () => set({ isAddRepoDialogOpen: false }),
+  toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
 }));

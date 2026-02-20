@@ -5,27 +5,83 @@ import Button from '../ui/Button.js';
 export default function Sidebar() {
   const openAddRepoDialog = useUiStore((s) => s.openAddRepoDialog);
   const openSettings = useUiStore((s) => s.openSettings);
+  const collapsed = useUiStore((s) => s.isSidebarCollapsed);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   return (
-    <aside className="flex w-60 flex-col border-r border-gray-200 bg-white">
-      {/* App title */}
-      <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white text-xs font-bold">
+    <aside
+      className={`flex shrink-0 flex-col border-r border-gray-200 bg-white overflow-hidden transition-[width] duration-200 ease-in-out ${
+        collapsed ? 'w-16' : 'w-60'
+      }`}
+    >
+      {/* Header */}
+      <div
+        className={`flex items-center border-b border-gray-200 ${
+          collapsed ? 'flex-col gap-2 px-2 py-3' : 'gap-2 px-4 py-4'
+        }`}
+      >
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white text-xs font-bold">
           MT
         </div>
-        <span className="text-sm font-semibold text-gray-900">My Team</span>
+        {!collapsed && (
+          <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900 truncate">
+            My Team
+          </span>
+        )}
+        <button
+          onClick={toggleSidebar}
+          className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-4 w-4 transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
       </div>
 
       {/* Repo section */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Repos
-          </span>
-          <Button variant="ghost" size="sm" onClick={openAddRepoDialog}>
+      {!collapsed ? (
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Repos
+            </span>
+            <Button variant="ghost" size="sm" onClick={openAddRepoDialog}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-3.5 w-3.5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </Button>
+          </div>
+          <RepoList />
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col items-center gap-2 py-3">
+          <button
+            onClick={openAddRepoDialog}
+            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            title="Add repo"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-3.5 w-3.5"
+              className="h-5 w-5"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -35,20 +91,24 @@ export default function Sidebar() {
                 clipRule="evenodd"
               />
             </svg>
-          </Button>
+          </button>
         </div>
-        <RepoList />
-      </div>
+      )}
 
-      {/* Settings button at bottom */}
-      <div className="border-t border-gray-200 px-3 py-3">
+      {/* Settings button */}
+      <div
+        className={`border-t border-gray-200 ${collapsed ? 'flex justify-center px-2 py-3' : 'px-3 py-3'}`}
+      >
         <button
           onClick={openSettings}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+          className={`flex items-center rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors ${
+            collapsed ? 'p-2' : 'w-full gap-2 px-2 py-1.5'
+          }`}
+          title="Settings"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4"
+            className="h-4 w-4 shrink-0"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -58,7 +118,7 @@ export default function Sidebar() {
               clipRule="evenodd"
             />
           </svg>
-          Settings
+          {!collapsed && 'Settings'}
         </button>
       </div>
     </aside>
