@@ -1,6 +1,8 @@
 import { Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
+import { db } from '../db/connection.js';
 import { setupChatHandler } from './chatHandler.js';
 
 export function setupWebSocket(server: HttpServer): WebSocketServer {
@@ -37,8 +39,16 @@ export function setupWebSocket(server: HttpServer): WebSocketServer {
   });
 
   // Bridge ProcessManager events to all connected WebSocket clients
-  processManager.on('worker:event', (cardId: string, event: unknown) => {
-    const message = JSON.stringify({ ...event as object, cardId });
+  processManager.on('worker:event', (cardId: string, event: Record<string, unknown>) => {
+    // Persist Claude's complete response as a card comment
+    if (event.type === 'chat:message_complete' && event.content) {
+      const commentId = uuidv4();
+      db.prepare(
+        'INSERT INTO card_comments (id, card_id, author, body) VALUES (?, ?, ?, ?)'
+      ).run(commentId, cardId, 'claude', event.content as string);
+    }
+
+    const message = JSON.stringify({ ...event, cardId });
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);

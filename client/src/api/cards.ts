@@ -47,3 +47,20 @@ export function deleteCard(id: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+export interface BranchDiffFile {
+  filename: string;
+  status: string;
+  patch: string;
+}
+
+export interface BranchDiffResult {
+  diff: string;
+  files: BranchDiffFile[];
+  baseBranch: string;
+  currentBranch: string;
+}
+
+export function fetchBranchDiff(cardId: string): Promise<BranchDiffResult> {
+  return apiFetch<BranchDiffResult>(`/cards/${cardId}/git/branch-diff`);
+}

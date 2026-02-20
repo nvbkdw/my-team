@@ -38,7 +38,6 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
-  // Close status menu on outside click
   useEffect(() => {
     if (!showStatusMenu) return;
     const handleClick = (e: MouseEvent) => {
@@ -78,7 +77,28 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
   const cfg = statusConfig[card.status];
 
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-6 py-4">
+    <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-3 bg-white">
+      {/* Back arrow */}
+      <button
+        onClick={closeCard}
+        className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+        title="Back to board"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-5 w-5"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
+      {/* Title */}
       <div className="flex-1 min-w-0">
         {editing ? (
           <input
@@ -104,38 +124,38 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
             {card.title}
           </h2>
         )}
+      </div>
 
-        {/* Status badge */}
-        <div className="relative mt-2" ref={statusRef}>
-          <button onClick={() => setShowStatusMenu(!showStatusMenu)}>
-            <Badge color={cfg.color}>{cfg.label}</Badge>
-          </button>
+      {/* Status badge */}
+      <div className="relative" ref={statusRef}>
+        <button onClick={() => setShowStatusMenu(!showStatusMenu)}>
+          <Badge color={cfg.color}>{cfg.label}</Badge>
+        </button>
 
-          {showStatusMenu && (
-            <div className="absolute left-0 top-8 z-20 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-              {allStatuses.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => handleStatusChange(s)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      s === 'backlog'
-                        ? 'bg-gray-400'
-                        : s === 'priority'
-                          ? 'bg-amber-400'
-                          : s === 'in_progress'
-                            ? 'bg-blue-500'
-                            : 'bg-green-500'
-                    }`}
-                  />
-                  {statusConfig[s].label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {showStatusMenu && (
+          <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+            {allStatuses.map((s) => (
+              <button
+                key={s}
+                onClick={() => handleStatusChange(s)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    s === 'backlog'
+                      ? 'bg-gray-400'
+                      : s === 'priority'
+                        ? 'bg-amber-400'
+                        : s === 'in_progress'
+                          ? 'bg-blue-500'
+                          : 'bg-green-500'
+                  }`}
+                />
+                {statusConfig[s].label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Delete */}

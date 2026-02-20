@@ -1,9 +1,9 @@
-import { spawn, ChildProcess } from 'node:child_process';
-import { NdjsonParser } from '../utils/ndjsonParser.js';
+import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { SdkLogger } from '../utils/sdkLogger.js';
 
 export interface ClaudeRunnerOptions {
   cwd: string;
-  sessionId: string;
+  cardId: string;
 }
 
 type EventCallback = (event: ClaudeEvent) => void;
@@ -12,148 +12,210 @@ export type ClaudeEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_use'; name: string; input: unknown }
   | { type: 'tool_result'; name: string; result: string }
-  | { type: 'message_complete'; content: string; costUsd?: number }
+  | { type: 'message_complete'; content: string; costUsd?: number; sessionId?: string }
   | { type: 'error'; error: string }
   | { type: 'exit'; code: number | null };
 
 export class ClaudeRunner {
-  private process: ChildProcess | null = null;
   private options: ClaudeRunnerOptions;
-  private parser = new NdjsonParser();
+  private abortController: AbortController | null = null;
+  private running = false;
 
   constructor(options: ClaudeRunnerOptions) {
     this.options = options;
   }
 
-  run(message: string, onEvent: EventCallback): void {
-    if (this.process) {
+  async run(message: string, sessionId: string | null, onEvent: EventCallback): Promise<void> {
+    if (this.running) {
       onEvent({ type: 'error', error: 'Claude process already running' });
       return;
     }
 
-    const args = [
-      '-p', message,
-      '--output-format', 'stream-json',
-      '--session-id', this.options.sessionId,
-      '--verbose',
-    ];
+    this.running = true;
+    this.abortController = new AbortController();
 
-    this.process = spawn('claude', args, {
-      cwd: this.options.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
-    });
+    const logger = new SdkLogger(this.options.cardId);
+    logger.logUserPrompt(message);
+    if (sessionId) logger.logRawMessage('resume', sessionId);
+
+    // Strip Claude Code env vars to avoid nested session issues
+    const { CLAUDECODE, CLAUDE_CODE_SSE_PORT, CLAUDE_CODE_ENTRYPOINT, ...cleanEnv } = process.env;
 
     let fullContent = '';
+    let capturedSessionId: string | undefined;
+    let costUsd: number | undefined;
+    let wasStreaming = false;
 
-    this.process.stdout?.on('data', (chunk: Buffer) => {
-      const events = this.parser.parse(chunk.toString());
-      for (const event of events) {
-        const parsed = this.parseClaudeEvent(event);
-        if (parsed) {
-          if (parsed.type === 'token') {
-            fullContent += parsed.text;
-          }
-          onEvent(parsed);
+    try {
+      const stream = query({
+        prompt: message,
+        options: {
+          cwd: this.options.cwd,
+          permissionMode: 'bypassPermissions',
+          allowDangerouslySkipPermissions: true,
+          includePartialMessages: true,
+          settingSources: ['project'],
+          maxTurns: 50,
+          abortController: this.abortController,
+          env: cleanEnv as Record<string, string>,
+          ...(sessionId ? { resume: sessionId } : {}),
+        },
+      });
+
+      for await (const msg of stream) {
+        if (this.abortController?.signal.aborted) {
+          logger.logAbort();
+          break;
         }
+        wasStreaming = this.handleMessage(msg, onEvent, logger, wasStreaming,
+          (text) => { fullContent += text; },
+          (sid) => { capturedSessionId = sid; },
+          (cost) => { costUsd = cost; },
+        );
       }
-    });
-
-    this.process.stderr?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString().trim();
-      if (text) {
-        console.error(`[ClaudeRunner] stderr: ${text}`);
+    } catch (err: unknown) {
+      if (this.abortController?.signal.aborted) {
+        logger.logAbort();
+      } else {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        logger.logError(errorMsg);
+        onEvent({ type: 'error', error: errorMsg });
       }
-    });
-
-    this.process.on('close', (code) => {
-      // Flush any remaining buffered data
-      const remaining = this.parser.flush();
-      for (const event of remaining) {
-        const parsed = this.parseClaudeEvent(event);
-        if (parsed) {
-          if (parsed.type === 'token') {
-            fullContent += parsed.text;
-          }
-          onEvent(parsed);
-        }
-      }
-
-      onEvent({ type: 'message_complete', content: fullContent });
-      onEvent({ type: 'exit', code });
-      this.process = null;
-    });
-
-    this.process.on('error', (err) => {
-      onEvent({ type: 'error', error: err.message });
-      this.process = null;
-    });
+    } finally {
+      if (wasStreaming) logger.logTokenBoundary();
+      this.running = false;
+      this.abortController = null;
+      logger.close(fullContent, costUsd, capturedSessionId);
+      onEvent({
+        type: 'message_complete',
+        content: fullContent,
+        costUsd,
+        sessionId: capturedSessionId,
+      });
+      onEvent({ type: 'exit', code: 0 });
+    }
   }
 
-  private parseClaudeEvent(raw: unknown): ClaudeEvent | null {
-    if (!raw || typeof raw !== 'object') return null;
-    const obj = raw as Record<string, unknown>;
-
-    // Claude stream-json format parsing
-    // Handle different message types from Claude CLI stream-json output
-    if (obj.type === 'assistant' && obj.message) {
-      const msg = obj.message as Record<string, unknown>;
-      if (msg.type === 'text') {
-        return { type: 'token', text: msg.text as string };
+  /**
+   * Returns whether we are currently in a streaming-tokens sequence
+   * (so the caller can flush the boundary marker when streaming ends).
+   */
+  private handleMessage(
+    msg: SDKMessage,
+    onEvent: EventCallback,
+    logger: SdkLogger,
+    wasStreaming: boolean,
+    appendContent: (text: string) => void,
+    setSessionId: (sid: string) => void,
+    setCost: (cost: number) => void,
+  ): boolean {
+    switch (msg.type) {
+      case 'system': {
+        const subtype = 'subtype' in msg ? (msg.subtype as string) : undefined;
+        if (subtype === 'init') {
+          const initMsg = msg as { session_id: string; model?: string; tools?: string[] };
+          setSessionId(initMsg.session_id);
+          logger.logSystemInit(
+            initMsg.session_id,
+            initMsg.model ?? 'unknown',
+            initMsg.tools ?? [],
+          );
+        } else {
+          logger.logRawMessage('system', subtype);
+        }
+        return false;
       }
-    }
 
-    // Content block delta (streaming tokens)
-    if (obj.type === 'content_block_delta') {
-      const delta = obj.delta as Record<string, unknown>;
-      if (delta?.type === 'text_delta') {
-        return { type: 'token', text: delta.text as string };
+      case 'stream_event': {
+        const event = msg.event;
+        if (event.type === 'content_block_delta') {
+          const delta = event.delta as { type: string; text?: string };
+          if (delta.type === 'text_delta' && delta.text) {
+            if (!wasStreaming) {
+              logger.logRawMessage('stream_event', 'text_delta (start)');
+            }
+            logger.logToken(delta.text);
+            onEvent({ type: 'token', text: delta.text });
+            appendContent(delta.text);
+            return true; // currently streaming
+          }
+        }
+        // Non-text streaming events (message_start, content_block_start/stop, etc.)
+        if (wasStreaming) {
+          logger.logTokenBoundary();
+        }
+        return false;
       }
-    }
 
-    // Content block start (tool use)
-    if (obj.type === 'content_block_start') {
-      const block = obj.content_block as Record<string, unknown>;
-      if (block?.type === 'tool_use') {
-        return {
-          type: 'tool_use',
-          name: block.name as string,
-          input: block.input,
+      case 'assistant': {
+        if (wasStreaming) {
+          logger.logTokenBoundary();
+        }
+        const content = msg.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'tool_use') {
+              logger.logToolUse(block.name, block.input);
+              onEvent({ type: 'tool_use', name: block.name, input: block.input });
+            } else if (block.type === 'text' && block.text) {
+              logger.logAssistantText(block.text as string);
+            }
+          }
+        }
+        return false;
+      }
+
+      case 'user': {
+        if (wasStreaming) logger.logTokenBoundary();
+        // User messages include tool results
+        const content = msg.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'tool_result') {
+              const resultBlock = block as { tool_use_id?: string; content?: unknown };
+              const resultText = typeof resultBlock.content === 'string'
+                ? resultBlock.content
+                : JSON.stringify(resultBlock.content ?? '');
+              logger.logToolResult(resultBlock.tool_use_id ?? 'unknown', resultText);
+            }
+          }
+        }
+        return false;
+      }
+
+      case 'result': {
+        if (wasStreaming) logger.logTokenBoundary();
+        const resultMsg = msg as {
+          subtype?: string;
+          total_cost_usd: number;
+          num_turns?: number;
+          duration_ms?: number;
+          result?: string;
         };
+        setCost(resultMsg.total_cost_usd);
+        logger.logResult(
+          resultMsg.subtype ?? 'unknown',
+          resultMsg.total_cost_usd,
+          resultMsg.num_turns ?? 0,
+          resultMsg.duration_ms ?? 0,
+        );
+        return false;
       }
-    }
 
-    // Tool result
-    if (obj.type === 'result') {
-      const content = (obj as Record<string, unknown>).result as string | undefined;
-      return {
-        type: 'message_complete',
-        content: content ?? '',
-        costUsd: (obj as Record<string, unknown>).cost_usd as number | undefined,
-      };
+      default:
+        if (wasStreaming) logger.logTokenBoundary();
+        logger.logRawMessage(msg.type, 'subtype' in msg ? (msg as Record<string, unknown>).subtype as string : undefined);
+        return false;
     }
-
-    // Simple text message (non-streaming fallback)
-    if (typeof obj.text === 'string') {
-      return { type: 'token', text: obj.text };
-    }
-
-    return null;
   }
 
   abort(): void {
-    if (this.process) {
-      this.process.kill('SIGTERM');
-      setTimeout(() => {
-        if (this.process) {
-          this.process.kill('SIGKILL');
-          this.process = null;
-        }
-      }, 5000);
+    if (this.abortController) {
+      this.abortController.abort();
     }
   }
 
   get isRunning(): boolean {
-    return this.process !== null;
+    return this.running;
   }
 }

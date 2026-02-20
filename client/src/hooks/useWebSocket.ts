@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from 'react';
-import { useChatStore } from '../stores/chatStore.js';
 import { useWorkerStore } from '../stores/workerStore.js';
 
 let globalWs: WebSocket | null = null;
@@ -37,7 +36,7 @@ function createConnection(): WebSocket {
 
   ws.onopen = () => {
     console.log('[WS] Connected');
-    reconnectAttempt = 0; // Reset backoff on successful connection
+    reconnectAttempt = 0;
   };
 
   ws.onclose = (event) => {
@@ -47,8 +46,6 @@ function createConnection(): WebSocket {
   };
 
   ws.onerror = () => {
-    // Error details aren't useful in browser (security restriction).
-    // The close event will follow and trigger reconnect.
     console.warn('[WS] Connection error (close event will follow)');
   };
 
@@ -69,25 +66,24 @@ function dispatchMessage(msg: Record<string, unknown>) {
 
   switch (msg.type) {
     case 'chat:token':
-      useChatStore.getState().setIsStreaming(true);
-      useChatStore.getState().appendStreamingText(msg.text as string);
-      break;
-
-    case 'chat:message_complete': {
-      const sessionId = useChatStore.getState().activeSessionId;
-      if (sessionId) {
-        useChatStore.getState().finalizeStreaming(
-          sessionId,
-          msg.content as string,
-          msg.costUsd as number | undefined
-        );
+      if (cardId) {
+        useWorkerStore.getState().setIsStreaming(cardId, true);
+        useWorkerStore.getState().appendStreamingText(cardId, msg.text as string);
       }
       break;
-    }
+
+    case 'chat:message_complete':
+      if (cardId) {
+        useWorkerStore.getState().clearStreaming(cardId);
+        useWorkerStore.getState().notifyCommentsChanged(cardId);
+      }
+      break;
 
     case 'chat:error':
       console.warn('[WS] Chat error:', msg.error);
-      useChatStore.getState().setIsStreaming(false);
+      if (cardId) {
+        useWorkerStore.getState().clearStreaming(cardId);
+      }
       break;
 
     case 'chat:tool_use':
@@ -144,19 +140,21 @@ export function useWebSocket() {
     return () => {
       subscribers--;
       console.log('[WS] Hook unmounted, subscribers:', subscribers);
-      if (subscribers <= 0) {
-        subscribers = 0;
-        reconnectAttempt = 0;
-        if (reconnectTimer) {
-          clearTimeout(reconnectTimer);
-          reconnectTimer = null;
+      setTimeout(() => {
+        if (subscribers <= 0) {
+          subscribers = 0;
+          reconnectAttempt = 0;
+          if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+          }
+          if (globalWs) {
+            console.log('[WS] Closing connection (no subscribers)');
+            globalWs.close();
+            globalWs = null;
+          }
         }
-        if (globalWs) {
-          console.log('[WS] Closing connection (no subscribers)');
-          globalWs.close();
-          globalWs = null;
-        }
-      }
+      }, 100);
     };
   }, []);
 

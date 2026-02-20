@@ -1,5 +1,7 @@
 import { WebSocket } from 'ws';
+import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
+import { db } from '../db/connection.js';
 
 interface WsMessage {
   type: string;
@@ -60,6 +62,12 @@ function handleChatSend(ws: WebSocket, msg: WsMessage): void {
     );
     return;
   }
+
+  // Persist user message as a card comment
+  const commentId = uuidv4();
+  db.prepare(
+    'INSERT INTO card_comments (id, card_id, author, body) VALUES (?, ?, ?, ?)'
+  ).run(commentId, cardId, 'user', message);
 
   const sent = processManager.sendInstruction(cardId, message as string);
   if (!sent) {

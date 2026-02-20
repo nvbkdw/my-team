@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { useBoardStore } from '../stores/boardStore.js';
 import { useUiStore } from '../stores/uiStore.js';
-import { useFileStore } from '../stores/fileStore.js';
 import type { Card } from '../types/models.js';
 
 export function useCardDetail() {
@@ -10,14 +9,12 @@ export function useCardDetail() {
   const updateCard = useBoardStore((s) => s.updateCard);
   const removeCard = useBoardStore((s) => s.removeCard);
   const closeCard = useUiStore((s) => s.closeCard);
-  const clearFiles = useFileStore((s) => s.clearAll);
 
   const card: Card | undefined = cards.find((c) => c.id === selectedCardId);
 
   const handleClose = useCallback(() => {
-    clearFiles();
     closeCard();
-  }, [clearFiles, closeCard]);
+  }, [closeCard]);
 
   const handleUpdateTitle = useCallback(
     (title: string) => {
@@ -47,7 +44,7 @@ export function useCardDetail() {
   const handleStatusChange = useCallback(
     (status: string) => {
       if (card) {
-        updateCard(card.id, { status });
+        updateCard(card.id, { status: status as import('../types/models.js').CardStatus });
       }
     },
     [card, updateCard]

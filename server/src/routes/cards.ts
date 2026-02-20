@@ -90,9 +90,8 @@ router.patch('/:id/move', async (req: Request, res: Response, next: NextFunction
         }
         if (!workerDir) workerDir = process.cwd();
 
-        const sessionId = uuidv4();
-        console.log(`[Cards] Spawning worker for card ${card.id}, dir: ${workerDir}, session: ${sessionId}`);
-        processManager.spawnWorker(card.id, workerDir, sessionId);
+        console.log(`[Cards] Spawning worker for card ${card.id}, dir: ${workerDir}`);
+        processManager.spawnWorker(card.id, workerDir);
       } else if (oldCard.status === 'in_progress') {
         // Kill worker when moving out of in_progress
         console.log(`[Cards] Killing worker for card ${card.id}`);
@@ -311,6 +310,32 @@ router.get('/:id/git/diff', async (req: Request, res: Response, next: NextFuncti
     }
     const diff = await gitService.getDiff(card.branch_dir as string);
     res.json({ diff });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/cards/:id/git/branch-diff - get diff against base branch
+router.get('/:id/git/branch-diff', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const card = CardService.getById(param(req, 'id')) as Record<string, unknown> | undefined;
+    if (!card?.branch_dir) {
+      res.status(404).json({ error: 'Card has no branch directory' });
+      return;
+    }
+
+    // Resolve the base branch from the repo's default_branch
+    let baseBranch = 'main';
+    if (card.repo_id) {
+      const repo = db.prepare('SELECT default_branch FROM repos WHERE id = ?')
+        .get(card.repo_id as string) as { default_branch: string } | undefined;
+      if (repo?.default_branch) {
+        baseBranch = repo.default_branch;
+      }
+    }
+
+    const result = await gitService.diffAgainstBase(card.branch_dir as string, baseBranch);
+    res.json(result);
   } catch (err) {
     next(err);
   }

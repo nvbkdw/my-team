@@ -118,6 +118,101 @@ export class GitService {
     const result = await git.branchLocal();
     return result.current;
   }
+
+  /**
+   * Returns the unified diff of the current branch against a base branch.
+   * Uses `git diff <baseBranch>...HEAD` (three-dot) to show changes since
+   * the branch diverged from base. Also includes any uncommitted changes.
+   */
+  async diffAgainstBase(
+    dir: string,
+    baseBranch: string = 'main'
+  ): Promise<{
+    diff: string;
+    files: Array<{
+      filename: string;
+      status: string;
+      patch: string;
+    }>;
+    baseBranch: string;
+    currentBranch: string;
+  }> {
+    const git = this.getGit(dir);
+    const currentBranch = (await git.branchLocal()).current;
+
+    // Get the merge-base to diff against
+    let mergeBase: string;
+    try {
+      mergeBase = (await git.raw(['merge-base', baseBranch, 'HEAD'])).trim();
+    } catch {
+      // If merge-base fails (e.g., no common ancestor), fall back to diffing
+      // directly against the base branch ref
+      mergeBase = baseBranch;
+    }
+
+    // Full unified diff: committed changes since divergence + uncommitted
+    const committedDiff = await git.diff([`${mergeBase}...HEAD`]);
+    const uncommittedDiff = await git.diff();
+    const stagedDiff = await git.diff(['--cached']);
+
+    // Combine all diffs — committed branch changes are the primary content,
+    // supplemented by any working tree changes not yet committed
+    const fullDiff = [committedDiff, stagedDiff, uncommittedDiff]
+      .filter(Boolean)
+      .join('\n');
+
+    // Parse diff into per-file entries
+    const files = parseDiffIntoFiles(fullDiff);
+
+    return {
+      diff: fullDiff,
+      files,
+      baseBranch,
+      currentBranch,
+    };
+  }
+}
+
+/**
+ * Parse a unified diff string into per-file entries.
+ * Each patch includes the full diff headers (---, +++, @@) needed by
+ * parsers like @git-diff-view.
+ */
+function parseDiffIntoFiles(
+  diff: string
+): Array<{ filename: string; status: string; patch: string }> {
+  if (!diff.trim()) return [];
+
+  const files: Array<{ filename: string; status: string; patch: string }> = [];
+  // Split on "diff --git" boundaries
+  const parts = diff.split(/^diff --git /m).filter(Boolean);
+
+  for (const part of parts) {
+    const lines = part.split('\n');
+    // First line: "a/path b/path"
+    const headerMatch = lines[0].match(/a\/(.+?)\s+b\/(.+)/);
+    if (!headerMatch) continue;
+
+    const filename = headerMatch[2];
+
+    // Determine status from diff headers
+    let status = 'modified';
+    if (part.includes('new file mode')) status = 'added';
+    else if (part.includes('deleted file mode')) status = 'removed';
+    else if (part.includes('rename from')) status = 'renamed';
+
+    // Include everything after the "a/path b/path" line:
+    // index line, --- a/file, +++ b/file, @@ hunks, and content lines.
+    // The parser needs --- and +++ headers to properly parse hunks.
+    const patchLines: string[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      patchLines.push(lines[i]);
+    }
+
+    files.push({ filename, status, patch: patchLines.join('\n') });
+  }
+
+  return files;
 }
 
 export const gitService = new GitService();

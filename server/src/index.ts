@@ -1,5 +1,4 @@
 import { createServer } from 'node:http';
-import { v4 as uuidv4 } from 'uuid';
 import app from './app.js';
 import { config } from './config.js';
 import { initializeDatabase } from './db/schema.js';
@@ -22,9 +21,8 @@ server.listen(config.port, () => {
 
   for (const card of inProgressCards) {
     const workerDir = card.branch_dir || card.repo_path || process.cwd();
-    const sessionId = uuidv4();
     console.log(`[Startup] Spawning worker for in_progress card ${card.id}, dir: ${workerDir}`);
-    processManager.spawnWorker(card.id, workerDir, sessionId);
+    processManager.spawnWorker(card.id, workerDir);
   }
 
   if (inProgressCards.length > 0) {

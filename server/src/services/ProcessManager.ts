@@ -10,7 +10,6 @@ interface WorkerInfo {
   process: ChildProcess;
   cardId: string;
   branchDir: string;
-  sessionId: string;
   status: 'idle' | 'running' | 'error';
   restartCount: number;
   lastError?: string;
@@ -52,15 +51,15 @@ export class ProcessManager extends EventEmitter {
     return worker ? worker.status : 'none';
   }
 
-  getAllWorkerStatuses(): Record<string, { status: string; sessionId: string }> {
-    const result: Record<string, { status: string; sessionId: string }> = {};
+  getAllWorkerStatuses(): Record<string, { status: string }> {
+    const result: Record<string, { status: string }> = {};
     for (const [cardId, info] of this.workers) {
-      result[cardId] = { status: info.status, sessionId: info.sessionId };
+      result[cardId] = { status: info.status };
     }
     return result;
   }
 
-  spawnWorker(cardId: string, branchDir: string, sessionId: string): boolean {
+  spawnWorker(cardId: string, branchDir: string): boolean {
     if (this.workers.has(cardId)) {
       console.log(`[ProcessManager] Worker for card ${cardId} already exists`);
       return true;
@@ -73,15 +72,17 @@ export class ProcessManager extends EventEmitter {
       return false;
     }
 
+    // Strip Claude Code session env vars so workers don't inherit "nested session" markers
+    const { CLAUDECODE, CLAUDE_CODE_SSE_PORT, CLAUDE_CODE_ENTRYPOINT, ...cleanEnv } = process.env;
+
     console.log(`[ProcessManager] Forking worker: ${this.workerModulePath}`);
     const child = fork(this.workerModulePath, [], {
       // Use tsx loader so the forked process can execute .ts files
       execArgv: ['--import', 'tsx'],
       env: {
-        ...process.env,
+        ...cleanEnv,
         WORKER_CARD_ID: cardId,
         WORKER_BRANCH_DIR: branchDir,
-        WORKER_SESSION_ID: sessionId,
       },
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
     });
@@ -90,7 +91,6 @@ export class ProcessManager extends EventEmitter {
       process: child,
       cardId,
       branchDir,
-      sessionId,
       status: 'idle',
       restartCount: 0,
     };
@@ -133,7 +133,7 @@ export class ProcessManager extends EventEmitter {
         );
         setTimeout(() => {
           if (!this.workers.has(cardId)) {
-            const restarted = this.spawnWorker(cardId, branchDir, sessionId);
+            const restarted = this.spawnWorker(cardId, branchDir);
             if (restarted) {
               const newInfo = this.workers.get(cardId);
               if (newInfo) {

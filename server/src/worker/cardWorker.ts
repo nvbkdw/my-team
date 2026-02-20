@@ -11,7 +11,6 @@ import { FileWatcher } from './fileWatcher.js';
 interface WorkerConfig {
   cardId: string;
   branchDir: string;
-  sessionId: string;
 }
 
 type MainToWorker =
@@ -30,15 +29,18 @@ function send(msg: unknown): void {
 const config: WorkerConfig = {
   cardId: process.env.WORKER_CARD_ID!,
   branchDir: process.env.WORKER_BRANCH_DIR!,
-  sessionId: process.env.WORKER_SESSION_ID!,
 };
 
-if (!config.cardId || !config.branchDir || !config.sessionId) {
+if (!config.cardId || !config.branchDir) {
   console.error('[CardWorker] Missing required config environment variables');
   process.exit(1);
 }
 
-let claudeRunner: ClaudeRunner | null = null;
+// SDK session ID for multi-turn conversation (captured from system.init)
+let sdkSessionId: string | null = null;
+
+// Create a single ClaudeRunner instance, reused across messages
+const claudeRunner = new ClaudeRunner({ cwd: config.branchDir, cardId: config.cardId });
 
 // Set up file watcher
 const fileWatcher = new FileWatcher(config.branchDir, (files) => {
@@ -64,20 +66,15 @@ process.on('message', (msg: MainToWorker) => {
   }
 });
 
-function handleChatSend(message: string): void {
-  if (claudeRunner?.isRunning) {
+async function handleChatSend(message: string): Promise<void> {
+  if (claudeRunner.isRunning) {
     send({ type: 'chat:error', error: 'A Claude session is already running' });
     return;
   }
 
   send({ type: 'status', status: 'running' });
 
-  claudeRunner = new ClaudeRunner({
-    cwd: config.branchDir,
-    sessionId: config.sessionId,
-  });
-
-  claudeRunner.run(message, (event) => {
+  await claudeRunner.run(message, sdkSessionId, (event) => {
     switch (event.type) {
       case 'token':
         send({ type: 'chat:token', text: event.text });
@@ -89,6 +86,10 @@ function handleChatSend(message: string): void {
         send({ type: 'chat:tool_result', name: event.name, result: event.result });
         break;
       case 'message_complete':
+        // Capture session ID for multi-turn resume
+        if (event.sessionId) {
+          sdkSessionId = event.sessionId;
+        }
         send({
           type: 'chat:message_complete',
           content: event.content,
@@ -108,14 +109,14 @@ function handleChatSend(message: string): void {
 }
 
 function handleChatAbort(): void {
-  if (claudeRunner?.isRunning) {
+  if (claudeRunner.isRunning) {
     claudeRunner.abort();
     send({ type: 'status', status: 'idle' });
   }
 }
 
 function handleShutdown(): void {
-  if (claudeRunner?.isRunning) {
+  if (claudeRunner.isRunning) {
     claudeRunner.abort();
   }
   fileWatcher.stop();
