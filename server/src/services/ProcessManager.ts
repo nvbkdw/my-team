@@ -162,13 +162,13 @@ export class ProcessManager extends EventEmitter {
     return true;
   }
 
-  sendInstruction(cardId: string, message: string): boolean {
+  sendInstruction(cardId: string, message: string, context?: { description: string; comments: Array<{ author: string; body: string; created_at: string }> }): boolean {
     const worker = this.workers.get(cardId);
     if (!worker) {
       console.warn(`[ProcessManager] No worker for card ${cardId}`);
       return false;
     }
-    worker.process.send({ type: 'chat:send', message });
+    worker.process.send({ type: 'chat:send', message, context });
     return true;
   }
 

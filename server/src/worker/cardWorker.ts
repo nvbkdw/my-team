@@ -13,8 +13,13 @@ interface WorkerConfig {
   branchDir: string;
 }
 
+interface CardContext {
+  description: string;
+  comments: Array<{ author: string; body: string; created_at: string }>;
+}
+
 type MainToWorker =
-  | { type: 'chat:send'; message: string }
+  | { type: 'chat:send'; message: string; context?: CardContext }
   | { type: 'chat:abort' }
   | { type: 'config:update'; config: Partial<WorkerConfig> }
   | { type: 'shutdown' };
@@ -52,7 +57,7 @@ fileWatcher.start();
 process.on('message', (msg: MainToWorker) => {
   switch (msg.type) {
     case 'chat:send':
-      handleChatSend(msg.message);
+      handleChatSend(msg.message, msg.context);
       break;
     case 'chat:abort':
       handleChatAbort();
@@ -66,7 +71,26 @@ process.on('message', (msg: MainToWorker) => {
   }
 });
 
-async function handleChatSend(message: string): Promise<void> {
+function buildContextPrompt(message: string, context: CardContext): string {
+  const parts: string[] = [];
+
+  if (context.description.trim()) {
+    parts.push(`Feature specification:\n${context.description.trim()}`);
+  }
+
+  if (context.comments.length > 0) {
+    const commentLines = context.comments.map(
+      (c) => `[${c.author}] ${c.body}`
+    );
+    parts.push(`Design and implementation details:\n${commentLines.join('\n')}`);
+  }
+
+  parts.push(`User request:\n${message}`);
+
+  return parts.join('\n\n');
+}
+
+async function handleChatSend(message: string, context?: CardContext): Promise<void> {
   if (claudeRunner.isRunning) {
     send({ type: 'chat:error', error: 'A Claude session is already running' });
     return;
@@ -74,7 +98,13 @@ async function handleChatSend(message: string): Promise<void> {
 
   send({ type: 'status', status: 'running' });
 
-  await claudeRunner.run(message, sdkSessionId, (event) => {
+  // On first message (new session), inject card context into the prompt.
+  // On resumed sessions, Claude already has the prior context.
+  const prompt = !sdkSessionId && context
+    ? buildContextPrompt(message, context)
+    : message;
+
+  await claudeRunner.run(prompt, sdkSessionId, (event) => {
     switch (event.type) {
       case 'token':
         send({ type: 'chat:token', text: event.text });

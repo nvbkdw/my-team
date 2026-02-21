@@ -3,6 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
 import { db } from '../db/connection.js';
 
+export interface CardContext {
+  description: string;
+  comments: Array<{ author: string; body: string; created_at: string }>;
+}
+
 interface WsMessage {
   type: string;
   cardId?: string;
@@ -69,7 +74,10 @@ function handleChatSend(ws: WebSocket, msg: WsMessage): void {
     'INSERT INTO card_comments (id, card_id, author, body) VALUES (?, ?, ?, ?)'
   ).run(commentId, cardId, 'user', message);
 
-  const sent = processManager.sendInstruction(cardId, message as string);
+  // Gather card context (description + all comments) for Claude
+  const context = buildCardContext(cardId);
+
+  const sent = processManager.sendInstruction(cardId, message as string, context);
   if (!sent) {
     ws.send(
       JSON.stringify({ type: 'chat:error', cardId, error: 'Failed to send message to worker' })
@@ -95,4 +103,19 @@ function handleWorkerStatus(ws: WebSocket, msg: WsMessage): void {
     const statuses = processManager.getAllWorkerStatuses();
     ws.send(JSON.stringify({ type: 'worker:statuses', statuses }));
   }
+}
+
+function buildCardContext(cardId: string): CardContext {
+  const card = db.prepare('SELECT description FROM cards WHERE id = ?').get(cardId) as
+    | { description: string }
+    | undefined;
+
+  const comments = db
+    .prepare('SELECT author, body, created_at FROM card_comments WHERE card_id = ? ORDER BY created_at ASC')
+    .all(cardId) as Array<{ author: string; body: string; created_at: string }>;
+
+  return {
+    description: card?.description ?? '',
+    comments,
+  };
 }
