@@ -6,6 +6,7 @@ import { fetchBranchDiff, type BranchDiffFile } from '../../api/cards.js';
 import * as prApi from '../../api/pr.js';
 import type { PRData } from '../../api/pr.js';
 import { useUiStore } from '../../stores/uiStore.js';
+import { apiFetch } from '../../api/client.js';
 import Badge from '../ui/Badge.js';
 import Button from '../ui/Button.js';
 import Spinner from '../ui/Spinner.js';
@@ -233,6 +234,31 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
   const [prLoading, setPrLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // IDE launcher
+  const [ideMenuOpen, setIdeMenuOpen] = useState(false);
+  const ideMenuRef = useRef<HTMLDivElement>(null);
+
+  const openInIde = useCallback(async (ide: 'cursor' | 'code') => {
+    setIdeMenuOpen(false);
+    try {
+      await apiFetch(`/cards/${cardId}/ide/open?ide=${ide}`, { method: 'POST' });
+    } catch (err) {
+      setError(`Failed to open ${ide === 'cursor' ? 'Cursor' : 'VS Code'}: ${(err as Error).message}`);
+    }
+  }, [cardId]);
+
+  // Close IDE menu on outside click
+  useEffect(() => {
+    if (!ideMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ideMenuRef.current && !ideMenuRef.current.contains(e.target as Node)) {
+        setIdeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [ideMenuOpen]);
+
   // Refs for scroll-to-file
   const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -336,6 +362,38 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
           >
             Refresh
           </button>
+
+          {/* Open in Editor */}
+          <div ref={ideMenuRef} className="relative">
+            <button
+              onClick={() => setIdeMenuOpen((o) => !o)}
+              className="inline-flex items-center gap-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 3.5L7 10l6.5 6.5M3 10h14" />
+              </svg>
+              Open in Editor
+              <svg className="h-3 w-3 opacity-60" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+            {ideMenuOpen && (
+              <div className="absolute left-0 top-full mt-1 z-50 w-36 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                <button
+                  onClick={() => openInIde('cursor')}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Cursor
+                </button>
+                <button
+                  onClick={() => openInIde('code')}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  VS Code
+                </button>
+              </div>
+            )}
+          </div>
 
           {pr ? (
             <>
