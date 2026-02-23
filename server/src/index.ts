@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { initializeDatabase } from './db/schema.js';
 import { setupWebSocket } from './ws/index.js';
 import { processManager } from './services/ProcessManager.js';
+import { devServerManager } from './services/DevServerManager.js';
 import { db } from './db/connection.js';
 
 initializeDatabase();
@@ -33,14 +34,14 @@ server.listen(config.port, () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('Shutting down...');
-  await processManager.killAll();
+  await Promise.all([processManager.killAll(), devServerManager.stopAll()]);
   server.close();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('Shutting down...');
-  await processManager.killAll();
+  await Promise.all([processManager.killAll(), devServerManager.stopAll()]);
   server.close();
   process.exit(0);
 });

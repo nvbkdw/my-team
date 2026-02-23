@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useWorkerStore } from '../stores/workerStore.js';
+import { useDevServerStore, type DevServerStatus } from '../stores/devServerStore.js';
 
 let globalWs: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -114,6 +115,31 @@ function dispatchMessage(msg: Record<string, unknown>) {
 
     case 'files:changed':
       console.log('[WS] Files changed:', msg.files);
+      break;
+
+    case 'devserver:status':
+      if (cardId) {
+        useDevServerStore.getState().setDevServerStatus(
+          cardId,
+          msg.status as DevServerStatus,
+          msg.port as number | undefined,
+          msg.url as string | undefined,
+          msg.error as string | undefined,
+          msg.previewUrl as string | undefined,
+        );
+      }
+      break;
+
+    case 'devserver:statuses':
+      useDevServerStore.getState().setAllStatuses(
+        msg.statuses as Record<string, { status: string; port?: number; url?: string; previewUrl?: string }>,
+      );
+      break;
+
+    case 'devserver:exit':
+      if (cardId) {
+        useDevServerStore.getState().removeDevServer(cardId);
+      }
       break;
 
     case 'pong':

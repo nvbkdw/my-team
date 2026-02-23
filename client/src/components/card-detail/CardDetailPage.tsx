@@ -5,6 +5,7 @@ import Spinner from '../ui/Spinner.js';
 import CardDetailHeader from './CardDetailHeader.js';
 import DetailsTab from './DetailsTab.js';
 import PRDiffPanel from './PRDiffPanel.js';
+import PreviewPanel from './PreviewPanel.js';
 
 const MIN_LEFT_WIDTH = 320;
 const MIN_RIGHT_WIDTH = 300;
@@ -16,6 +17,7 @@ export default function CardDetailPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [rightTab, setRightTab] = useState<'diff' | 'preview'>('diff');
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -78,14 +80,56 @@ export default function CardDetailPage() {
             ${isDragging ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'}`}
         />
 
-        {/* Right panel — branch diff */}
-        <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950" style={{ minWidth: MIN_RIGHT_WIDTH }}>
-          <PRDiffPanel
-            cardId={card.id}
-            prNumber={card.pr_number}
-            branchName={card.branch_name}
-            hasBranch={!!card.branch_dir}
-          />
+        {/* Right panel — tabbed: Code Diff / Preview */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" style={{ minWidth: MIN_RIGHT_WIDTH }}>
+          {/* Tab bar */}
+          <div className="shrink-0 flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+            <button
+              onClick={() => setRightTab('diff')}
+              className={`px-4 py-2 text-xs font-medium transition-colors relative ${
+                rightTab === 'diff'
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Code Diff
+              {rightTab === 'diff' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+              )}
+            </button>
+            <button
+              onClick={() => setRightTab('preview')}
+              className={`px-4 py-2 text-xs font-medium transition-colors relative ${
+                rightTab === 'preview'
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Preview
+              {rightTab === 'preview' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+              )}
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-hidden">
+            {rightTab === 'diff' ? (
+              <div className="h-full overflow-y-auto">
+                <PRDiffPanel
+                  cardId={card.id}
+                  prNumber={card.pr_number}
+                  branchName={card.branch_name}
+                  hasBranch={!!card.branch_dir}
+                />
+              </div>
+            ) : (
+              <PreviewPanel
+                cardId={card.id}
+                hasBranch={!!card.branch_dir}
+              />
+            )}
+          </div>
         </div>
 
         {/* Overlay to capture mouse events while dragging */}

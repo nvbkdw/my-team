@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
+import { devServerManager } from '../services/DevServerManager.js';
 import { db } from '../db/connection.js';
 import { setupChatHandler } from './chatHandler.js';
 
@@ -22,6 +23,12 @@ export function setupWebSocket(server: HttpServer): WebSocketServer {
     const initMsg = JSON.stringify({ type: 'worker:statuses', statuses });
     console.log('[WS] Sending initial statuses:', initMsg);
     ws.send(initMsg);
+
+    // Send current dev server statuses on connect
+    const devStatuses = devServerManager.getAllServerStatuses();
+    if (Object.keys(devStatuses).length > 0) {
+      ws.send(JSON.stringify({ type: 'devserver:statuses', statuses: devStatuses }));
+    }
 
     ws.on('close', (code, reason) => {
       console.log(`[WS] Client disconnected, code: ${code}, reason: ${reason.toString()}, remaining: ${clients.size - 1}`);
@@ -62,6 +69,25 @@ export function setupWebSocket(server: HttpServer): WebSocketServer {
       cardId,
       code,
     });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  // Bridge DevServerManager events to all connected WebSocket clients
+  devServerManager.on('devserver:event', (cardId: string, event: Record<string, unknown>) => {
+    const message = JSON.stringify({ ...event, cardId });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  devServerManager.on('devserver:exit', (cardId: string, code: number) => {
+    const message = JSON.stringify({ type: 'devserver:exit', cardId, code });
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);

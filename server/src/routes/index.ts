@@ -5,6 +5,7 @@ import settingsRouter from './settings.js';
 import filesRouter from './files.js';
 import prRouter from './pr.js';
 import ideRouter from './ide.js';
+import devserverRouter from './devserver.js';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/api/settings', settingsRouter);
 router.use('/api', filesRouter);
 router.use('/api', prRouter);
 router.use('/api', ideRouter);
+router.use('/api', devserverRouter);
 
 export default router;
