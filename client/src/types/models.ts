@@ -42,3 +42,14 @@ export interface CardComment {
   body: string;
   created_at: string;
 }
+
+export interface Subtask {
+  id: string;
+  card_id: string;
+  parent_id: string | null;
+  title: string;
+  completed: number;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}

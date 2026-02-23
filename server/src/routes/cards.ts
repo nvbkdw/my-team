@@ -6,6 +6,7 @@ import { gitService } from '../services/GitService.js';
 import { processManager } from '../services/ProcessManager.js';
 import { db } from '../db/connection.js';
 import { param } from '../utils/params.js';
+import subtasksRouter from './subtasks.js';
 
 const router = Router();
 
@@ -340,5 +341,8 @@ router.get('/:id/git/branch-diff', async (req: Request, res: Response, next: Nex
     next(err);
   }
 });
+
+// === Subtasks (nested router) ===
+router.use('/:id/subtasks', subtasksRouter);
 
 export default router;

@@ -3,6 +3,7 @@ import type { Card } from '../../types/models.js';
 import { useBoardStore } from '../../stores/boardStore.js';
 import BranchInfo from './BranchInfo.js';
 import LabelManager from './LabelManager.js';
+import SubtaskList from './SubtaskList.js';
 import CommentsList from './CommentsList.js';
 
 interface DetailsTabProps {
@@ -31,6 +32,12 @@ export default function DetailsTab({ card }: DetailsTabProps) {
       <div className="overflow-y-auto px-6 py-4 space-y-6">
         <LabelManager cardId={card.id} />
       </div>
+
+      {/* Branch info */}
+      <div className="overflow-y-auto px-6 py-2">
+        <BranchInfo card={card} />
+      </div>
+
       {/* Card metadata — collapsible */}
       <button
         type="button"
@@ -67,13 +74,8 @@ export default function DetailsTab({ card }: DetailsTabProps) {
             />
           </div>
 
-          {/* Branch info */}
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Branch
-            </label>
-            <BranchInfo card={card} />
-          </div>
+          {/* Sub-tasks */}
+          <SubtaskList cardId={card.id} />
         </div>
       )}
 
