@@ -7,6 +7,7 @@
 
 import { ClaudeRunner } from './claudeRunner.js';
 import { FileWatcher } from './fileWatcher.js';
+import { TraceLogger } from '../utils/traceLogger.js';
 
 interface WorkerConfig {
   cardId: string;
@@ -46,9 +47,11 @@ let sdkSessionId: string | null = null;
 
 // Create a single ClaudeRunner instance, reused across messages
 const claudeRunner = new ClaudeRunner({ cwd: config.branchDir, cardId: config.cardId });
+const traceLogger = new TraceLogger(config.cardId);
 
 // Set up file watcher
 const fileWatcher = new FileWatcher(config.branchDir, (files) => {
+  traceLogger.logFilesChanged(files);
   send({ type: 'files:changed', files });
 });
 fileWatcher.start();
@@ -97,6 +100,7 @@ async function handleChatSend(message: string, context?: CardContext): Promise<v
   }
 
   send({ type: 'status', status: 'running' });
+  traceLogger.logStatusChange('running');
 
   // On first message (new session), inject card context into the prompt.
   // On resumed sessions, Claude already has the prior context.
@@ -104,16 +108,32 @@ async function handleChatSend(message: string, context?: CardContext): Promise<v
     ? buildContextPrompt(message, context)
     : message;
 
+  traceLogger.logRunStart(message);
+
   await claudeRunner.run(prompt, sdkSessionId, (event) => {
     switch (event.type) {
       case 'token':
         send({ type: 'chat:token', text: event.text });
         break;
+      case 'system_init':
+        traceLogger.logSystemInit(event.sessionId, event.model, event.tools);
+        send({ type: 'chat:system_init', sessionId: event.sessionId, model: event.model, tools: event.tools });
+        break;
+      case 'assistant_text':
+        traceLogger.logAssistantText(event.text);
+        send({ type: 'chat:assistant_text', text: event.text });
+        break;
       case 'tool_use':
-        send({ type: 'chat:tool_use', name: event.name, input: event.input });
+        traceLogger.logToolUse(event.name, event.toolUseId, event.input);
+        send({ type: 'chat:tool_use', name: event.name, input: event.input, toolUseId: event.toolUseId });
         break;
       case 'tool_result':
-        send({ type: 'chat:tool_result', name: event.name, result: event.result });
+        traceLogger.logToolResult(event.name, event.toolUseId, event.result);
+        send({ type: 'chat:tool_result', name: event.name, result: event.result, toolUseId: event.toolUseId });
+        break;
+      case 'result_stats':
+        traceLogger.logRunEnd(event.costUsd, event.numTurns, event.durationMs);
+        send({ type: 'chat:result_stats', costUsd: event.costUsd, numTurns: event.numTurns, durationMs: event.durationMs });
         break;
       case 'message_complete':
         // Capture session ID for multi-turn resume
@@ -126,10 +146,13 @@ async function handleChatSend(message: string, context?: CardContext): Promise<v
           costUsd: event.costUsd,
         });
         send({ type: 'status', status: 'idle' });
+        traceLogger.logStatusChange('idle');
         break;
       case 'error':
+        traceLogger.logError(event.error);
         send({ type: 'chat:error', error: event.error });
         send({ type: 'status', status: 'error', error: event.error });
+        traceLogger.logStatusChange('error');
         break;
       case 'exit':
         // Already handled by message_complete
@@ -141,6 +164,8 @@ async function handleChatSend(message: string, context?: CardContext): Promise<v
 function handleChatAbort(): void {
   if (claudeRunner.isRunning) {
     claudeRunner.abort();
+    traceLogger.logAbort();
+    traceLogger.logStatusChange('idle');
     send({ type: 'status', status: 'idle' });
   }
 }
@@ -150,6 +175,7 @@ function handleShutdown(): void {
     claudeRunner.abort();
   }
   fileWatcher.stop();
+  traceLogger.close();
   send({ type: 'status', status: 'idle' });
   setTimeout(() => process.exit(0), 500);
 }

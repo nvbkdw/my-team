@@ -6,6 +6,7 @@ import filesRouter from './files.js';
 import prRouter from './pr.js';
 import ideRouter from './ide.js';
 import devserverRouter from './devserver.js';
+import tracesRouter from './traces.js';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/api', filesRouter);
 router.use('/api', prRouter);
 router.use('/api', ideRouter);
 router.use('/api', devserverRouter);
+router.use('/api', tracesRouter);
 
 export default router;

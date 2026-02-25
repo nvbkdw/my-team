@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { useWorkerStore } from '../stores/workerStore.js';
 import { useDevServerStore, type DevServerStatus } from '../stores/devServerStore.js';
+import { useHistoryStore } from '../stores/historyStore.js';
 
 let globalWs: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,8 +88,49 @@ function dispatchMessage(msg: Record<string, unknown>) {
       }
       break;
 
+    case 'chat:system_init':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'system_init',
+          sessionId: msg.sessionId, model: msg.model, tools: msg.tools,
+        });
+      }
+      break;
+
+    case 'chat:assistant_text':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'assistant_text',
+          text: msg.text,
+        });
+      }
+      break;
+
     case 'chat:tool_use':
-      console.log('[WS] Tool use:', msg.name);
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'tool_use',
+          name: msg.name, input: msg.input, toolUseId: msg.toolUseId,
+        });
+      }
+      break;
+
+    case 'chat:tool_result':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'tool_result',
+          name: msg.name, result: msg.result, toolUseId: msg.toolUseId,
+        });
+      }
+      break;
+
+    case 'chat:result_stats':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'run_end',
+          costUsd: msg.costUsd, numTurns: msg.numTurns, durationMs: msg.durationMs,
+        });
+      }
       break;
 
     case 'status':
@@ -98,6 +140,10 @@ function dispatchMessage(msg: Record<string, unknown>) {
           msg.status as 'idle' | 'running' | 'error',
           msg.error as string | undefined
         );
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'status_change',
+          status: msg.status,
+        });
       }
       break;
 
@@ -114,7 +160,12 @@ function dispatchMessage(msg: Record<string, unknown>) {
       break;
 
     case 'files:changed':
-      console.log('[WS] Files changed:', msg.files);
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'files_changed',
+          files: msg.files,
+        });
+      }
       break;
 
     case 'devserver:status':

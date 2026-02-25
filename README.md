@@ -1,6 +1,8 @@
 # My Team
 
-A Kanban board where every card is an AI-powered development environment. Drag a task to "In Progress" and a dedicated Claude Code session spins up — with its own Git branch, file watcher, and streaming AI chat — turning your task tracker into a hands-on coding workbench.
+Imagine a team of AI coding agents working on multiple projects together. My Team is an Orchestra of an AI coding agent team.
+
+The main UI is a Kanban board - just like how human do project planning - however, every card is an AI-powered development environment. Drag a task to "In Progress" and a dedicated Claude Code session spins up — with its own Git branch, file watcher, and streaming AI chat — turning your task tracker into a hands-on coding workbench.
 
 ## Why This Exists
 

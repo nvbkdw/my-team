@@ -10,8 +10,11 @@ type EventCallback = (event: ClaudeEvent) => void;
 
 export type ClaudeEvent =
   | { type: 'token'; text: string }
-  | { type: 'tool_use'; name: string; input: unknown }
-  | { type: 'tool_result'; name: string; result: string }
+  | { type: 'system_init'; sessionId: string; model: string; tools: string[] }
+  | { type: 'assistant_text'; text: string }
+  | { type: 'tool_use'; name: string; input: unknown; toolUseId: string }
+  | { type: 'tool_result'; name: string; result: string; toolUseId: string }
+  | { type: 'result_stats'; costUsd: number; numTurns: number; durationMs: number }
   | { type: 'message_complete'; content: string; costUsd?: number; sessionId?: string }
   | { type: 'error'; error: string }
   | { type: 'exit'; code: number | null };
@@ -20,6 +23,7 @@ export class ClaudeRunner {
   private options: ClaudeRunnerOptions;
   private abortController: AbortController | null = null;
   private running = false;
+  private toolUseIdToName = new Map<string, string>();
 
   constructor(options: ClaudeRunnerOptions) {
     this.options = options;
@@ -33,6 +37,7 @@ export class ClaudeRunner {
 
     this.running = true;
     this.abortController = new AbortController();
+    this.toolUseIdToName.clear();
 
     const logger = new SdkLogger(this.options.cardId);
     logger.logUserPrompt(message);
@@ -120,6 +125,12 @@ export class ClaudeRunner {
             initMsg.model ?? 'unknown',
             initMsg.tools ?? [],
           );
+          onEvent({
+            type: 'system_init',
+            sessionId: initMsg.session_id,
+            model: initMsg.model ?? 'unknown',
+            tools: initMsg.tools ?? [],
+          });
         } else {
           logger.logRawMessage('system', subtype);
         }
@@ -155,10 +166,13 @@ export class ClaudeRunner {
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'tool_use') {
+              const toolUseId = (block as { id?: string }).id ?? 'unknown';
+              this.toolUseIdToName.set(toolUseId, block.name);
               logger.logToolUse(block.name, block.input);
-              onEvent({ type: 'tool_use', name: block.name, input: block.input });
+              onEvent({ type: 'tool_use', name: block.name, input: block.input, toolUseId });
             } else if (block.type === 'text' && block.text) {
               logger.logAssistantText(block.text as string);
+              onEvent({ type: 'assistant_text', text: block.text as string });
             }
           }
         }
@@ -173,10 +187,13 @@ export class ClaudeRunner {
           for (const block of content) {
             if (block.type === 'tool_result') {
               const resultBlock = block as { tool_use_id?: string; content?: unknown };
+              const toolUseId = resultBlock.tool_use_id ?? 'unknown';
+              const name = this.toolUseIdToName.get(toolUseId) ?? 'unknown';
               const resultText = typeof resultBlock.content === 'string'
                 ? resultBlock.content
                 : JSON.stringify(resultBlock.content ?? '');
-              logger.logToolResult(resultBlock.tool_use_id ?? 'unknown', resultText);
+              logger.logToolResult(toolUseId, resultText);
+              onEvent({ type: 'tool_result', name, result: resultText, toolUseId });
             }
           }
         }
@@ -199,6 +216,12 @@ export class ClaudeRunner {
           resultMsg.num_turns ?? 0,
           resultMsg.duration_ms ?? 0,
         );
+        onEvent({
+          type: 'result_stats',
+          costUsd: resultMsg.total_cost_usd,
+          numTurns: resultMsg.num_turns ?? 0,
+          durationMs: resultMsg.duration_ms ?? 0,
+        });
         return false;
       }
 

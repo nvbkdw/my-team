@@ -6,6 +6,7 @@ import CardDetailHeader from './CardDetailHeader.js';
 import DetailsTab from './DetailsTab.js';
 import PRDiffPanel from './PRDiffPanel.js';
 import PreviewPanel from './PreviewPanel.js';
+import HistoryPanel from './HistoryPanel.js';
 
 const MIN_LEFT_WIDTH = 320;
 const MIN_RIGHT_WIDTH = 300;
@@ -17,7 +18,7 @@ export default function CardDetailPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [rightTab, setRightTab] = useState<'diff' | 'preview'>('diff');
+  const [rightTab, setRightTab] = useState<'diff' | 'preview' | 'history'>('diff');
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -110,6 +111,19 @@ export default function CardDetailPage() {
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
               )}
             </button>
+            <button
+              onClick={() => setRightTab('history')}
+              className={`px-4 py-2 text-xs font-medium transition-colors relative ${
+                rightTab === 'history'
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              History
+              {rightTab === 'history' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+              )}
+            </button>
           </div>
 
           {/* Tab content */}
@@ -123,11 +137,13 @@ export default function CardDetailPage() {
                   hasBranch={!!card.branch_dir}
                 />
               </div>
-            ) : (
+            ) : rightTab === 'preview' ? (
               <PreviewPanel
                 cardId={card.id}
                 hasBranch={!!card.branch_dir}
               />
+            ) : (
+              <HistoryPanel cardId={card.id} />
             )}
           </div>
         </div>
