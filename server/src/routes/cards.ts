@@ -3,12 +3,61 @@ import type { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { CardService } from '../services/CardService.js';
 import { gitService } from '../services/GitService.js';
+import { githubService } from '../services/GitHubService.js';
+import { SettingsService as settingsService } from '../services/SettingsService.js';
 import { processManager } from '../services/ProcessManager.js';
 import { db } from '../db/connection.js';
 import { param } from '../utils/params.js';
 import subtasksRouter from './subtasks.js';
 
 const router = Router();
+
+/**
+ * Perform cleanup when a card is closed/done:
+ * kill worker, remove worktree, close PR. Each step is best-effort.
+ */
+async function performCardCleanup(card: Record<string, unknown>): Promise<{ branch_dir?: null; pr_state?: string }> {
+  const updates: { branch_dir?: null; pr_state?: string } = {};
+
+  // 1. Kill worker if running
+  try {
+    await processManager.killWorker(card.id as string);
+  } catch (err) {
+    console.warn(`[Cards] Failed to kill worker for card ${card.id}:`, err);
+  }
+
+  // 2. Remove worktree if card has branch_name and repo_id
+  if (card.branch_name && card.repo_id) {
+    try {
+      const repo = db.prepare('SELECT local_path FROM repos WHERE id = ?').get(card.repo_id as string) as { local_path: string } | undefined;
+      if (repo) {
+        await gitService.removeWorktree(repo.local_path, card.branch_name as string);
+        updates.branch_dir = null;
+      }
+    } catch (err) {
+      console.warn(`[Cards] Failed to remove worktree for card ${card.id}:`, err);
+    }
+  }
+
+  // 3. Close PR if open
+  if (card.pr_number && card.pr_state === 'open') {
+    try {
+      const pat = settingsService.get('github_pat');
+      if (pat && card.repo_id) {
+        const repo = db.prepare('SELECT github_owner, github_repo FROM repos WHERE id = ?')
+          .get(card.repo_id as string) as { github_owner: string; github_repo: string } | undefined;
+        if (repo?.github_owner && repo?.github_repo) {
+          await githubService.closePR(pat, repo.github_owner, repo.github_repo, card.pr_number as number);
+          updates.pr_state = 'closed';
+        }
+      }
+    } catch (err) {
+      console.warn(`[Cards] Failed to close PR for card ${card.id}:`, err);
+    }
+  }
+
+  return updates;
+}
 
 // GET /api/cards - list all cards
 router.get('/', (req: Request, res: Response, next: NextFunction) => {
@@ -98,9 +147,42 @@ router.patch('/:id/move', async (req: Request, res: Response, next: NextFunction
         console.log(`[Cards] Killing worker for card ${card.id}`);
         await processManager.killWorker(card.id);
       }
+
+      // Auto-cleanup when moving to done: remove worktree + close PR
+      if (status === 'done') {
+        const cleanupUpdates = await performCardCleanup(oldCard as unknown as Record<string, unknown>);
+        if (Object.keys(cleanupUpdates).length > 0) {
+          const refreshed = CardService.update(card.id, cleanupUpdates);
+          if (refreshed) {
+            res.json(refreshed);
+            return;
+          }
+        }
+      }
     }
 
     res.json(card);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/cards/:id/close - close card (cleanup worktree, PR, move to done)
+router.post('/:id/close', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const card = CardService.getById(param(req, 'id')) as Record<string, unknown> | undefined;
+    if (!card) {
+      res.status(404).json({ error: 'Card not found' });
+      return;
+    }
+
+    const cleanupUpdates = await performCardCleanup(card);
+
+    const updated = CardService.update(param(req, 'id'), {
+      status: 'done',
+      ...cleanupUpdates,
+    });
+    res.json(updated);
   } catch (err) {
     next(err);
   }

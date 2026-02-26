@@ -18,7 +18,11 @@ export default function CardDetailPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [rightTab, setRightTab] = useState<'diff' | 'preview' | 'history'>('diff');
+  const isDone = cards.find((c) => c.id === selectedCardId)?.status === 'done';
+  const [rightTab, setRightTab] = useState<'diff' | 'preview' | 'history'>(isDone ? 'history' : 'diff');
+
+  // Force history tab when card moves to done
+  const effectiveTab = isDone ? 'history' : rightTab;
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,42 +89,46 @@ export default function CardDetailPage() {
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" style={{ minWidth: MIN_RIGHT_WIDTH }}>
           {/* Tab bar */}
           <div className="shrink-0 flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-            <button
-              onClick={() => setRightTab('diff')}
-              className={`px-4 py-2 text-xs font-medium transition-colors relative ${
-                rightTab === 'diff'
-                  ? 'text-indigo-600 dark:text-indigo-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Code Diff
-              {rightTab === 'diff' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
-              )}
-            </button>
-            <button
-              onClick={() => setRightTab('preview')}
-              className={`px-4 py-2 text-xs font-medium transition-colors relative ${
-                rightTab === 'preview'
-                  ? 'text-indigo-600 dark:text-indigo-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Preview
-              {rightTab === 'preview' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
-              )}
-            </button>
+            {!isDone && (
+              <>
+                <button
+                  onClick={() => setRightTab('diff')}
+                  className={`px-4 py-2 text-xs font-medium transition-colors relative ${
+                    effectiveTab === 'diff'
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Code Diff
+                  {effectiveTab === 'diff' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setRightTab('preview')}
+                  className={`px-4 py-2 text-xs font-medium transition-colors relative ${
+                    effectiveTab === 'preview'
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Preview
+                  {effectiveTab === 'preview' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+                  )}
+                </button>
+              </>
+            )}
             <button
               onClick={() => setRightTab('history')}
               className={`px-4 py-2 text-xs font-medium transition-colors relative ${
-                rightTab === 'history'
+                effectiveTab === 'history'
                   ? 'text-indigo-600 dark:text-indigo-400'
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               History
-              {rightTab === 'history' && (
+              {effectiveTab === 'history' && (
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
               )}
             </button>
@@ -128,7 +136,7 @@ export default function CardDetailPage() {
 
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
-            {rightTab === 'diff' ? (
+            {effectiveTab === 'diff' ? (
               <div className="h-full overflow-y-auto">
                 <PRDiffPanel
                   cardId={card.id}
@@ -137,7 +145,7 @@ export default function CardDetailPage() {
                   hasBranch={!!card.branch_dir}
                 />
               </div>
-            ) : rightTab === 'preview' ? (
+            ) : effectiveTab === 'preview' ? (
               <PreviewPanel
                 cardId={card.id}
                 hasBranch={!!card.branch_dir}

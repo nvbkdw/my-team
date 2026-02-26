@@ -48,6 +48,10 @@ export function deleteCard(id: string): Promise<void> {
   });
 }
 
+export function closeCard(id: string): Promise<Card> {
+  return apiFetch<Card>(`/cards/${id}/close`, { method: 'POST' });
+}
+
 export interface BranchDiffFile {
   filename: string;
   status: string;

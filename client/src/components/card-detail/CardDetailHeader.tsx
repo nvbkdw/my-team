@@ -21,12 +21,14 @@ const allStatuses: CardStatus[] = ['backlog', 'priority', 'in_progress', 'done']
 export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
   const updateCard = useBoardStore((s) => s.updateCard);
   const removeCard = useBoardStore((s) => s.removeCard);
-  const closeCard = useUiStore((s) => s.closeCard);
+  const closeCardAction = useBoardStore((s) => s.closeCard);
+  const closeCardView = useUiStore((s) => s.closeCard);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
@@ -65,13 +67,22 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
     }
   };
 
+  const handleClose = async () => {
+    if (!confirmClose) {
+      setConfirmClose(true);
+      return;
+    }
+    await closeCardAction(card.id);
+    closeCardView();
+  };
+
   const handleDelete = async () => {
     if (!confirmDelete) {
       setConfirmDelete(true);
       return;
     }
     await removeCard(card.id);
-    closeCard();
+    closeCardView();
   };
 
   const cfg = statusConfig[card.status];
@@ -80,7 +91,7 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
     <div className="flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 px-6 py-3 bg-white dark:bg-gray-900">
       {/* Back arrow */}
       <button
-        onClick={closeCard}
+        onClick={closeCardView}
         className="rounded-md p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
         title="Back to board"
       >
@@ -157,6 +168,18 @@ export default function CardDetailHeader({ card }: CardDetailHeaderProps) {
           </div>
         )}
       </div>
+
+      {/* Close (cleanup worktree + PR, move to done) */}
+      {card.status !== 'done' && (
+        <Button
+          variant={confirmClose ? 'danger' : 'ghost'}
+          size="sm"
+          onClick={handleClose}
+          onBlur={() => setConfirmClose(false)}
+        >
+          {confirmClose ? 'Confirm?' : 'Close'}
+        </Button>
+      )}
 
       {/* Delete */}
       <Button

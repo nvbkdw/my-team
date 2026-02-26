@@ -134,6 +134,22 @@ export class GitHubService {
     );
   }
 
+  async closePR(
+    pat: string,
+    owner: string,
+    repo: string,
+    prNumber: number
+  ): Promise<PRData> {
+    const octokit = this.getOctokit(pat);
+    const { data } = await octokit.pulls.update({
+      owner,
+      repo,
+      pull_number: prNumber,
+      state: 'closed',
+    });
+    return data as unknown as PRData;
+  }
+
   async getPRChecks(
     pat: string,
     owner: string,

@@ -12,6 +12,7 @@ interface BoardState {
   updateCard: (id: string, data: Parameters<typeof cardsApi.updateCard>[1]) => Promise<void>;
   moveCard: (id: string, status: CardStatus, position: number) => Promise<void>;
   removeCard: (id: string) => Promise<void>;
+  closeCard: (id: string) => Promise<void>;
   getCardsByStatus: (status: CardStatus) => Card[];
 
   /** Apply an external card update (e.g. from WebSocket) without an API call */
@@ -68,6 +69,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     await cardsApi.deleteCard(id);
     set((state) => ({
       cards: state.cards.filter((c) => c.id !== id),
+    }));
+  },
+
+  closeCard: async (id) => {
+    const updated = await cardsApi.closeCard(id);
+    set((state) => ({
+      cards: state.cards.map((c) => (c.id === id ? updated : c)),
     }));
   },
 
