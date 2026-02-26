@@ -278,6 +278,69 @@ function dispatchMessage(msg: Record<string, unknown>) {
       // Streaming tokens and lifecycle events — no history entry needed
       break;
 
+    // ── PR Worker Events ──────────────────────────────────
+    case 'pr:status':
+      if (cardId) {
+        useWorkerStore.getState().setPRStatus(
+          cardId,
+          msg.status as 'none' | 'running' | 'complete' | 'error'
+        );
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'pr_status_change',
+          status: msg.status,
+        });
+      }
+      break;
+
+    case 'pr:step':
+      if (cardId) {
+        useWorkerStore.getState().setPRStep(
+          cardId,
+          msg.step as string,
+          msg.message as string
+        );
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'pr_step',
+          step: msg.step, message: msg.message,
+        });
+      }
+      break;
+
+    case 'pr:complete':
+      if (cardId) {
+        useWorkerStore.getState().setPRStatus(cardId, 'complete');
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'pr_complete',
+          pr: msg.pr,
+        });
+      }
+      break;
+
+    case 'pr:updated':
+      if (cardId) {
+        useWorkerStore.getState().setPRStatus(cardId, 'complete');
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'pr_updated',
+          prNumber: msg.prNumber, message: msg.message,
+        });
+      }
+      break;
+
+    case 'pr:error':
+      if (cardId) {
+        useWorkerStore.getState().setPRError(cardId, msg.error as string);
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'pr_error',
+          error: msg.error,
+        });
+      }
+      break;
+
+    case 'pr:ready':
+    case 'pr:exit':
+      // Lifecycle events — no special handling needed
+      break;
+
     case 'pong':
       break;
 
@@ -351,5 +414,12 @@ export function useWebSocket() {
     [sendMessage]
   );
 
-  return { sendChatMessage, abortChat, sendMessage, sendEvalRun };
+  const sendPRCreate = useCallback(
+    (cardId: string, title?: string, body?: string) => {
+      sendMessage('pr:create', { cardId, title, body });
+    },
+    [sendMessage]
+  );
+
+  return { sendChatMessage, abortChat, sendMessage, sendEvalRun, sendPRCreate };
 }

@@ -2,6 +2,9 @@ import { WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
 import { evalProcessManager } from '../services/EvalProcessManager.js';
+import { prProcessManager } from '../services/PRProcessManager.js';
+import { RepoService } from '../services/RepoService.js';
+import { SettingsService } from '../services/SettingsService.js';
 import { db } from '../db/connection.js';
 
 export interface CardContext {
@@ -39,6 +42,9 @@ export function setupChatHandler(ws: WebSocket): void {
         break;
       case 'eval:run':
         handleEvalRun(ws, msg);
+        break;
+      case 'pr:create':
+        handlePRCreate(ws, msg);
         break;
       case 'worker:status':
         handleWorkerStatus(ws, msg);
@@ -150,6 +156,90 @@ function handleEvalRun(ws: WebSocket, msg: WsMessage): void {
     ws.send(
       JSON.stringify({ type: 'eval:error', cardId, error: 'Failed to start evaluation' })
     );
+  }
+}
+
+async function handlePRCreate(ws: WebSocket, msg: WsMessage): Promise<void> {
+  const { cardId } = msg;
+  if (!cardId) {
+    ws.send(JSON.stringify({ type: 'error', error: 'cardId required' }));
+    return;
+  }
+
+  // Gather card + repo info
+  const card = db
+    .prepare('SELECT id, branch_name, branch_dir, repo_id, pr_number, pr_state FROM cards WHERE id = ?')
+    .get(cardId) as { id: string; branch_name: string | null; branch_dir: string | null; repo_id: string | null; pr_number: number | null; pr_state: string | null } | undefined;
+
+  if (!card) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Card not found' }));
+    return;
+  }
+
+  if (!card.branch_name) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Card has no branch' }));
+    return;
+  }
+
+  if (!card.repo_id) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Card has no linked repo' }));
+    return;
+  }
+
+  const repo = RepoService.getById(card.repo_id);
+  if (!repo) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Repo not found' }));
+    return;
+  }
+
+  // Auto-detect GitHub info if missing
+  let githubOwner = repo.github_owner;
+  let githubRepo = repo.github_repo;
+  if (!githubOwner || !githubRepo) {
+    await RepoService.detectAndUpdateGitHub(repo.id, repo.local_path);
+    const updated = RepoService.getById(repo.id);
+    githubOwner = updated?.github_owner ?? null;
+    githubRepo = updated?.github_repo ?? null;
+  }
+
+  if (!githubOwner || !githubRepo) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Repo has no GitHub remote configured' }));
+    return;
+  }
+
+  const pat = SettingsService.get('github_pat');
+  if (!pat) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'GitHub PAT not configured in settings' }));
+    return;
+  }
+
+  const branchDir = card.branch_dir || repo.local_path;
+
+  // Determine mode based on PR state machine:
+  //   no PR              → create
+  //   PR open            → update (commit + push)
+  //   PR closed/merged   → create new PR (old one is done)
+  const prIsActive = card.pr_number && card.pr_state === 'open';
+  const mode = prIsActive ? 'update' : 'create';
+  const title = (msg.title as string) || card.branch_name;
+  const body = (msg.body as string) || '';
+
+  const started = prProcessManager.createPR({
+    cardId,
+    branchDir,
+    branchName: card.branch_name,
+    baseBranch: repo.default_branch,
+    githubOwner,
+    githubRepo,
+    pat,
+    title,
+    body,
+    mode,
+    prNumber: card.pr_number ?? undefined,
+  } as import('../services/PRProcessManager.js').PRContext);
+
+  if (!started) {
+    ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Failed to start PR worker' }));
   }
 }
 

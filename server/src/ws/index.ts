@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
 import { devServerManager } from '../services/DevServerManager.js';
 import { evalProcessManager } from '../services/EvalProcessManager.js';
+import { prProcessManager } from '../services/PRProcessManager.js';
 import { db } from '../db/connection.js';
 import { setupChatHandler } from './chatHandler.js';
 
@@ -108,6 +109,33 @@ export function setupWebSocket(server: HttpServer): WebSocketServer {
 
   evalProcessManager.on('eval:exit', (cardId: string, code: number) => {
     const message = JSON.stringify({ type: 'eval:exit', cardId, code });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  // Bridge PRProcessManager events to all connected WebSocket clients
+  prProcessManager.on('pr:event', (cardId: string, event: Record<string, unknown>) => {
+    // When PR is complete, update the card in the DB
+    if (event.type === 'pr:complete' && event.pr) {
+      const pr = event.pr as { number: number; html_url: string; state: string };
+      db.prepare(
+        'UPDATE cards SET pr_number = ?, pr_url = ?, pr_state = ?, updated_at = datetime(\'now\') WHERE id = ?'
+      ).run(pr.number, pr.html_url, pr.state, cardId);
+    }
+
+    const message = JSON.stringify({ ...event, cardId });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  prProcessManager.on('pr:exit', (cardId: string, code: number) => {
+    const message = JSON.stringify({ type: 'pr:exit', cardId, code });
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);

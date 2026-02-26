@@ -6,6 +6,8 @@ import { fetchBranchDiff, type BranchDiffFile } from '../../api/cards.js';
 import * as prApi from '../../api/pr.js';
 import type { PRData } from '../../api/pr.js';
 import { useUiStore } from '../../stores/uiStore.js';
+import { useWorkerStore } from '../../stores/workerStore.js';
+import { useWebSocket } from '../../hooks/useWebSocket.js';
 import { apiFetch } from '../../api/client.js';
 import Badge from '../ui/Badge.js';
 import Button from '../ui/Button.js';
@@ -232,7 +234,14 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
   // Optional PR state
   const [pr, setPr] = useState<PRData | null>(null);
   const [prLoading, setPrLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+
+  // PR worker state from store
+  const prStatus = useWorkerStore((s) => s.prStatuses[cardId] || 'none');
+  const prStep = useWorkerStore((s) => s.prSteps[cardId]);
+  const prError = useWorkerStore((s) => s.prErrors[cardId]);
+  const { sendPRCreate } = useWebSocket();
+
+  const isPRWorkerRunning = prStatus === 'running';
 
   // IDE launcher
   const [ideMenuOpen, setIdeMenuOpen] = useState(false);
@@ -293,16 +302,37 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
     }
   }, [cardId, prNumber]);
 
-  const handleCreatePR = async () => {
-    setCreating(true);
-    try {
-      const prData = await prApi.createPR(cardId, branchName || 'PR', '');
-      setPr(prData);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setCreating(false);
+  // When PR worker completes, fetch the PR data
+  useEffect(() => {
+    if (prStatus === 'complete') {
+      prApi.fetchPR(cardId)
+        .then(setPr)
+        .catch(() => {});
+      // Refresh diff after push
+      loadBranchDiff();
+      // Clear PR worker state after a delay
+      const timer = setTimeout(() => {
+        useWorkerStore.getState().clearPRState(cardId);
+      }, 3000);
+      return () => clearTimeout(timer);
     }
+    if (prStatus === 'error' && prError) {
+      setError(prError);
+      const timer = setTimeout(() => {
+        useWorkerStore.getState().clearPRState(cardId);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [prStatus, prError, cardId, loadBranchDiff]);
+
+  const handleCreatePR = () => {
+    setError(null);
+    sendPRCreate(cardId, branchName || 'PR', '');
+  };
+
+  const handleUpdatePR = () => {
+    setError(null);
+    sendPRCreate(cardId, branchName || 'PR', '');
   };
 
   const handleFileClick = useCallback((filename: string) => {
@@ -395,7 +425,7 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
             )}
           </div>
 
-          {pr ? (
+          {pr && (
             <>
               <Badge
                 variant="solid"
@@ -417,16 +447,42 @@ export default function PRDiffPanel({ cardId, prNumber, branchName, hasBranch }:
                 </a>
               )}
             </>
-          ) : !prNumber && !prLoading && branchName ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreatePR}
-              disabled={creating}
-            >
-              {creating ? 'Creating PR...' : 'Create PR'}
-            </Button>
-          ) : null}
+          )}
+          {/* PR action button — state machine:
+              no PR           → "Create PR"
+              PR open         → "Push & Update PR"
+              PR closed/merged → "Create New PR" */}
+          {branchName && (() => {
+            const prClosed = pr && pr.state !== 'open';
+            const prOpen = pr && pr.state === 'open';
+            const noPr = !pr && !prLoading;
+
+            if (prOpen && files.length > 0) {
+              return (
+                <Button variant="ghost" size="sm" onClick={handleUpdatePR} disabled={isPRWorkerRunning}>
+                  {isPRWorkerRunning ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Spinner size="sm" />
+                      {prStep?.message || 'Updating PR...'}
+                    </span>
+                  ) : 'Push & Update PR'}
+                </Button>
+              );
+            }
+            if (noPr || prClosed) {
+              return (
+                <Button variant="ghost" size="sm" onClick={handleCreatePR} disabled={isPRWorkerRunning || prLoading}>
+                  {isPRWorkerRunning ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Spinner size="sm" />
+                      {prStep?.message || 'Creating PR...'}
+                    </span>
+                  ) : prClosed ? 'Create New PR' : 'Create PR'}
+                </Button>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
 

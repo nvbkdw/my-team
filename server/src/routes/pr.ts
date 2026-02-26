@@ -3,6 +3,7 @@ import { db } from '../db/connection.js';
 import { githubService } from '../services/GitHubService.js';
 import { gitService } from '../services/GitService.js';
 import { SettingsService as settingsService } from '../services/SettingsService.js';
+import { RepoService } from '../services/RepoService.js';
 import { param } from '../utils/params.js';
 
 const router = Router();
@@ -29,17 +30,26 @@ function getPat(): string {
   return pat;
 }
 
-function getCardAndRepo(cardId: string): { card: CardRow; repo: RepoRow } {
+async function getCardAndRepo(cardId: string): Promise<{ card: CardRow; repo: RepoRow }> {
   const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(cardId) as CardRow | undefined;
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
   if (!card.repo_id) throw Object.assign(new Error('Card has no linked repo'), { status: 400 });
 
-  const repo = db.prepare('SELECT * FROM repos WHERE id = ?').get(card.repo_id) as
+  let repo = db.prepare('SELECT * FROM repos WHERE id = ?').get(card.repo_id) as
     | RepoRow
     | undefined;
   if (!repo) throw Object.assign(new Error('Repo not found'), { status: 404 });
+
+  // Auto-detect GitHub owner/repo from git remote if missing, and persist for future use
   if (!repo.github_owner || !repo.github_repo) {
-    throw Object.assign(new Error('Repo has no GitHub remote configured'), { status: 400 });
+    const updated = await RepoService.detectAndUpdateGitHub(repo.id, repo.local_path);
+    if (updated) {
+      repo = db.prepare('SELECT * FROM repos WHERE id = ?').get(repo.id) as RepoRow;
+    }
+    if (!repo!.github_owner || !repo!.github_repo) {
+      throw Object.assign(new Error('Repo has no GitHub remote configured'), { status: 400 });
+    }
+    repo = repo!;
   }
 
   return { card, repo };
@@ -49,7 +59,7 @@ function getCardAndRepo(cardId: string): { card: CardRow; repo: RepoRow } {
 router.post('/cards/:cardId/pr', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pat = getPat();
-    const { card, repo } = getCardAndRepo(param(req, 'cardId'));
+    const { card, repo } = await getCardAndRepo(param(req, 'cardId'));
 
     if (!card.branch_name) {
       res.status(400).json({ error: 'Card has no branch' });
@@ -85,7 +95,7 @@ router.post('/cards/:cardId/pr', async (req: Request, res: Response, next: NextF
 router.get('/cards/:cardId/pr', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pat = getPat();
-    const { card, repo } = getCardAndRepo(param(req, 'cardId'));
+    const { card, repo } = await getCardAndRepo(param(req, 'cardId'));
 
     if (!card.pr_number) {
       res.status(404).json({ error: 'Card has no PR' });
@@ -111,7 +121,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const pat = getPat();
-      const { card, repo } = getCardAndRepo(param(req, 'cardId'));
+      const { card, repo } = await getCardAndRepo(param(req, 'cardId'));
 
       if (!card.pr_number) {
         res.status(404).json({ error: 'Card has no PR' });
@@ -137,7 +147,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const pat = getPat();
-      const { card, repo } = getCardAndRepo(param(req, 'cardId'));
+      const { card, repo } = await getCardAndRepo(param(req, 'cardId'));
 
       if (!card.pr_number) {
         res.status(404).json({ error: 'Card has no PR' });

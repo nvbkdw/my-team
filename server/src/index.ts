@@ -6,6 +6,7 @@ import { setupWebSocket } from './ws/index.js';
 import { processManager } from './services/ProcessManager.js';
 import { devServerManager } from './services/DevServerManager.js';
 import { evalProcessManager } from './services/EvalProcessManager.js';
+import { prProcessManager } from './services/PRProcessManager.js';
 import { db } from './db/connection.js';
 
 initializeDatabase();
@@ -35,14 +36,14 @@ server.listen(config.port, () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('Shutting down...');
-  await Promise.all([processManager.killAll(), devServerManager.stopAll(), evalProcessManager.killAll()]);
+  await Promise.all([processManager.killAll(), devServerManager.stopAll(), evalProcessManager.killAll(), prProcessManager.killAll()]);
   server.close();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('Shutting down...');
-  await Promise.all([processManager.killAll(), devServerManager.stopAll(), evalProcessManager.killAll()]);
+  await Promise.all([processManager.killAll(), devServerManager.stopAll(), evalProcessManager.killAll(), prProcessManager.killAll()]);
   server.close();
   process.exit(0);
 });

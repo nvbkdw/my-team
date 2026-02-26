@@ -2,6 +2,12 @@ import { create } from 'zustand';
 
 type WorkerStatus = 'none' | 'idle' | 'running' | 'error';
 type EvalStatus = 'none' | 'running' | 'complete' | 'error';
+type PRStatus = 'none' | 'running' | 'complete' | 'error';
+
+interface PRStepInfo {
+  step: string;
+  message: string;
+}
 
 interface WorkerState {
   statuses: Record<string, WorkerStatus>;
@@ -10,6 +16,9 @@ interface WorkerState {
   isStreaming: Record<string, boolean>;
   commentsVersion: Record<string, number>;
   evalStatuses: Record<string, EvalStatus>;
+  prStatuses: Record<string, PRStatus>;
+  prSteps: Record<string, PRStepInfo>;
+  prErrors: Record<string, string>;
 
   setWorkerStatus: (cardId: string, status: WorkerStatus, error?: string) => void;
   setAllStatuses: (statuses: Record<string, { status: string }>) => void;
@@ -20,6 +29,10 @@ interface WorkerState {
   clearStreaming: (cardId: string) => void;
   notifyCommentsChanged: (cardId: string) => void;
   setEvalStatus: (cardId: string, status: EvalStatus) => void;
+  setPRStatus: (cardId: string, status: PRStatus) => void;
+  setPRStep: (cardId: string, step: string, message: string) => void;
+  setPRError: (cardId: string, error: string) => void;
+  clearPRState: (cardId: string) => void;
 }
 
 export const useWorkerStore = create<WorkerState>((set, get) => ({
@@ -29,6 +42,9 @@ export const useWorkerStore = create<WorkerState>((set, get) => ({
   isStreaming: {},
   commentsVersion: {},
   evalStatuses: {},
+  prStatuses: {},
+  prSteps: {},
+  prErrors: {},
 
   setWorkerStatus: (cardId: string, status: WorkerStatus, error?: string) => {
     set((s) => ({
@@ -102,5 +118,33 @@ export const useWorkerStore = create<WorkerState>((set, get) => ({
     set((s) => ({
       evalStatuses: { ...s.evalStatuses, [cardId]: status },
     }));
+  },
+
+  setPRStatus: (cardId: string, status: PRStatus) => {
+    set((s) => ({
+      prStatuses: { ...s.prStatuses, [cardId]: status },
+    }));
+  },
+
+  setPRStep: (cardId: string, step: string, message: string) => {
+    set((s) => ({
+      prSteps: { ...s.prSteps, [cardId]: { step, message } },
+    }));
+  },
+
+  setPRError: (cardId: string, error: string) => {
+    set((s) => ({
+      prErrors: { ...s.prErrors, [cardId]: error },
+      prStatuses: { ...s.prStatuses, [cardId]: 'error' },
+    }));
+  },
+
+  clearPRState: (cardId: string) => {
+    set((s) => {
+      const { [cardId]: _s, ...restStatuses } = s.prStatuses;
+      const { [cardId]: _st, ...restSteps } = s.prSteps;
+      const { [cardId]: _e, ...restErrors } = s.prErrors;
+      return { prStatuses: restStatuses, prSteps: restSteps, prErrors: restErrors };
+    });
   },
 }));
