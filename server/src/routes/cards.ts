@@ -6,6 +6,7 @@ import { gitService } from '../services/GitService.js';
 import { githubService } from '../services/GitHubService.js';
 import { SettingsService as settingsService } from '../services/SettingsService.js';
 import { processManager } from '../services/ProcessManager.js';
+import { devEnvironmentManager } from '../services/devenv/DevEnvironmentManager.js';
 import { db } from '../db/connection.js';
 import { param } from '../utils/params.js';
 import subtasksRouter from './subtasks.js';
@@ -19,9 +20,10 @@ const router = Router();
 async function performCardCleanup(card: Record<string, unknown>): Promise<{ branch_dir?: null; pr_state?: string }> {
   const updates: { branch_dir?: null; pr_state?: string } = {};
 
-  // 1. Kill worker if running
+  // 1. Kill worker if running + destroy DevEnvironment
   try {
     await processManager.killWorker(card.id as string);
+    await devEnvironmentManager.destroy(card.id as string);
   } catch (err) {
     console.warn(`[Cards] Failed to kill worker for card ${card.id}:`, err);
   }
@@ -134,11 +136,29 @@ router.patch('/:id/move', async (req: Request, res: Response, next: NextFunction
         // Spawn worker when moving to in_progress
         // Use branch_dir if available, otherwise fall back to repo path or cwd
         let workerDir = card.branch_dir;
+        let repoPath = workerDir;
         if (!workerDir && card.repo_id) {
           const repo = db.prepare('SELECT local_path FROM repos WHERE id = ?').get(card.repo_id) as { local_path: string } | undefined;
-          if (repo) workerDir = repo.local_path;
+          if (repo) {
+            workerDir = repo.local_path;
+            repoPath = repo.local_path;
+          }
         }
         if (!workerDir) workerDir = process.cwd();
+        if (!repoPath) repoPath = workerDir;
+
+        // Provision DevEnvironment if Docker mode is enabled
+        if (devEnvironmentManager.isEnabled) {
+          try {
+            const image = card.repo_id
+              ? (db.prepare('SELECT docker_image FROM repos WHERE id = ?').get(card.repo_id) as { docker_image?: string } | undefined)?.docker_image
+              : undefined;
+            await devEnvironmentManager.provision(card.id, repoPath, workerDir, image || undefined);
+            console.log(`[Cards] Provisioned DevEnvironment for card ${card.id}`);
+          } catch (err) {
+            console.error(`[Cards] Failed to provision DevEnvironment for card ${card.id}, falling back to local:`, err);
+          }
+        }
 
         console.log(`[Cards] Spawning worker for card ${card.id}, dir: ${workerDir}`);
         processManager.spawnWorker(card.id, workerDir);
@@ -146,6 +166,8 @@ router.patch('/:id/move', async (req: Request, res: Response, next: NextFunction
         // Kill worker when moving out of in_progress
         console.log(`[Cards] Killing worker for card ${card.id}`);
         await processManager.killWorker(card.id);
+        // Destroy DevEnvironment if it exists
+        await devEnvironmentManager.destroy(card.id);
       }
 
       // Auto-cleanup when moving to done: remove worktree + close PR

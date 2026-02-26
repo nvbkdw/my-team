@@ -7,9 +7,13 @@ import { evalProcessManager } from '../services/EvalProcessManager.js';
 import { prProcessManager } from '../services/PRProcessManager.js';
 import { db } from '../db/connection.js';
 import { setupChatHandler } from './chatHandler.js';
+import { setupWorkerWebSocket, workerWsManager } from './workerWsHandler.js';
 
 export function setupWebSocket(server: HttpServer): WebSocketServer {
   const wss = new WebSocketServer({ server, path: '/ws' });
+
+  // Set up /ws/worker endpoint for containerized workers
+  setupWorkerWebSocket(server);
 
   const clients = new Set<WebSocket>();
 
@@ -136,6 +140,52 @@ export function setupWebSocket(server: HttpServer): WebSocketServer {
 
   prProcessManager.on('pr:exit', (cardId: string, code: number) => {
     const message = JSON.stringify({ type: 'pr:exit', cardId, code });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  // Bridge containerized worker events (from /ws/worker) to UI clients.
+  // Same event format as local IPC — only the source changes.
+  workerWsManager.on('worker:event', (cardId: string, event: Record<string, unknown>) => {
+    // Persist Claude's complete response as a card comment (same as local workers)
+    if (event.type === 'chat:message_complete' && event.content) {
+      const commentId = uuidv4();
+      db.prepare(
+        'INSERT INTO card_comments (id, card_id, author, body) VALUES (?, ?, ?, ?)'
+      ).run(commentId, cardId, 'claude', event.content as string);
+    }
+
+    const message = JSON.stringify({ ...event, cardId });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  workerWsManager.on('worker:exit', (cardId: string, code: number | null) => {
+    const message = JSON.stringify({ type: 'worker:exit', cardId, code });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  workerWsManager.on('eval:event', (cardId: string, event: Record<string, unknown>) => {
+    const message = JSON.stringify({ ...event, cardId });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  workerWsManager.on('eval:exit', (cardId: string, code: number | null) => {
+    const message = JSON.stringify({ type: 'eval:exit', cardId, code });
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);

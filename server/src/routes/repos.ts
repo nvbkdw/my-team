@@ -2,6 +2,9 @@ import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { RepoService } from '../services/RepoService.js';
 import { gitService } from '../services/GitService.js';
+import { devEnvironmentManager } from '../services/devenv/DevEnvironmentManager.js';
+import { resolveImage } from '../services/devenv/ImageResolver.js';
+import { db } from '../db/connection.js';
 import { param } from '../utils/params.js';
 
 const router = Router();
@@ -47,6 +50,19 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       github_pat_ref,
       default_branch,
     });
+
+    // Background: resolve Docker image for the repo (non-blocking)
+    if (devEnvironmentManager.isEnabled) {
+      try {
+        const image = resolveImage(local_path);
+        db.prepare('UPDATE repos SET docker_image = ?, updated_at = datetime(\'now\') WHERE id = ?')
+          .run(image, repo.id);
+        console.log(`[Repos] Resolved Docker image for ${name}: ${image}`);
+      } catch (err) {
+        console.warn(`[Repos] Failed to resolve Docker image for ${name}:`, err);
+      }
+    }
+
     res.status(201).json(repo);
   } catch (err) {
     next(err);

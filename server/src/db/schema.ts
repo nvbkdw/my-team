@@ -85,4 +85,7 @@ export function initializeDatabase(): void {
 
   // Migrations: add section column to card_subtasks
   try { db.exec(`ALTER TABLE card_subtasks ADD COLUMN section TEXT DEFAULT 'spec'`); } catch {}
+
+  // Migrations: add docker_image column to repos (for DevEnvironment image resolution)
+  try { db.exec(`ALTER TABLE repos ADD COLUMN docker_image TEXT`); } catch {}
 }

@@ -1,13 +1,14 @@
 /**
- * Card Worker - forked child process that manages a Claude Code session
- * and file watching for a single card's worktree directory.
+ * Card Worker - manages a Claude Code session and file watching
+ * for a single card's worktree directory.
  *
- * Communication with main process via Node IPC (process.send / process.on('message'))
+ * Communication with host via WorkerTransport (IPC when fork()-ed, WebSocket in containers).
  */
 
 import { ClaudeRunner } from './claudeRunner.js';
 import { FileWatcher } from './fileWatcher.js';
 import { TraceLogger } from '../utils/traceLogger.js';
+import { createTransport, type WorkerTransport } from './transport.js';
 
 interface WorkerConfig {
   cardId: string;
@@ -26,10 +27,10 @@ type MainToWorker =
   | { type: 'eval:result'; cardId: string; filename: string; summary: string; resultFilePath: string }
   | { type: 'shutdown' };
 
-function send(msg: unknown): void {
-  if (process.send) {
-    process.send(msg);
-  }
+const transport: WorkerTransport = createTransport();
+
+function send(msg: Record<string, unknown>): void {
+  transport.send(msg);
 }
 
 // Get config from environment variables passed during fork
@@ -57,27 +58,28 @@ const fileWatcher = new FileWatcher(config.branchDir, (files) => {
 });
 fileWatcher.start();
 
-// Handle messages from main process
-process.on('message', (msg: MainToWorker) => {
-  switch (msg.type) {
+// Handle messages from host (via IPC or WebSocket)
+transport.onMessage = (msg: Record<string, unknown>) => {
+  const typed = msg as unknown as MainToWorker;
+  switch (typed.type) {
     case 'chat:send':
-      handleChatSend(msg.message, msg.context);
+      handleChatSend(typed.message, typed.context);
       break;
     case 'chat:abort':
       handleChatAbort();
       break;
     case 'config:update':
-      Object.assign(config, msg.config);
+      Object.assign(config, typed.config);
       break;
     case 'eval:result':
-      console.log(`[CardWorker] Eval completed for card ${msg.cardId}: ${msg.summary}`);
-      console.log(`[CardWorker] Eval result file: ${msg.resultFilePath}`);
+      console.log(`[CardWorker] Eval completed for card ${typed.cardId}: ${typed.summary}`);
+      console.log(`[CardWorker] Eval result file: ${typed.resultFilePath}`);
       break;
     case 'shutdown':
       handleShutdown();
       break;
   }
-});
+};
 
 function buildContextPrompt(message: string, context: CardContext): string {
   const parts: string[] = [];
@@ -182,6 +184,7 @@ function handleShutdown(): void {
   fileWatcher.stop();
   traceLogger.close();
   send({ type: 'status', status: 'idle' });
+  transport.close();
   setTimeout(() => process.exit(0), 500);
 }
 

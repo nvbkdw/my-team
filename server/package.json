@@ -13,6 +13,7 @@
     "@octokit/rest": "^21.1.1",
     "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
+    "dockerode": "^4.0.9",
     "express": "^5.0.1",
     "ignore": "^7.0.5",
     "simple-git": "^3.27.0",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",
+    "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",
     "@types/uuid": "^10.0.0",

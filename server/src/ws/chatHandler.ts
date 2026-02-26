@@ -5,6 +5,9 @@ import { evalProcessManager } from '../services/EvalProcessManager.js';
 import { prProcessManager } from '../services/PRProcessManager.js';
 import { RepoService } from '../services/RepoService.js';
 import { SettingsService } from '../services/SettingsService.js';
+import { devEnvironmentManager } from '../services/devenv/DevEnvironmentManager.js';
+import { workerRunner } from '../services/WorkerRunner.js';
+import { workerWsManager } from './workerWsHandler.js';
 import { db } from '../db/connection.js';
 
 export interface CardContext {
@@ -67,7 +70,11 @@ function handleChatSend(ws: WebSocket, msg: WsMessage): void {
     return;
   }
 
-  if (!processManager.hasWorker(cardId)) {
+  // Check for a worker: either local (IPC) or containerized (WS)
+  const hasLocalWorker = processManager.hasWorker(cardId);
+  const hasContainerWorker = workerWsManager.hasWorker(cardId, 'card');
+
+  if (!hasLocalWorker && !hasContainerWorker) {
     ws.send(
       JSON.stringify({
         type: 'chat:error',
@@ -87,7 +94,18 @@ function handleChatSend(ws: WebSocket, msg: WsMessage): void {
   // Gather card context (description + all comments) for Claude
   const context = buildCardContext(cardId);
 
-  const sent = processManager.sendInstruction(cardId, message as string, context);
+  // Route to the appropriate worker
+  let sent = false;
+  if (hasContainerWorker) {
+    sent = workerWsManager.sendToWorker(cardId, 'card', {
+      type: 'chat:send',
+      message: message as string,
+      context,
+    });
+  } else {
+    sent = processManager.sendInstruction(cardId, message as string, context);
+  }
+
   if (!sent) {
     ws.send(
       JSON.stringify({ type: 'chat:error', cardId, error: 'Failed to send message to worker' })
@@ -101,13 +119,22 @@ function handleChatAbort(ws: WebSocket, msg: WsMessage): void {
     ws.send(JSON.stringify({ type: 'error', error: 'cardId required' }));
     return;
   }
-  processManager.abortWorker(cardId);
+
+  // Send abort to whichever transport the worker is using
+  if (workerWsManager.hasWorker(cardId, 'card')) {
+    workerWsManager.sendToWorker(cardId, 'card', { type: 'chat:abort' });
+  } else {
+    processManager.abortWorker(cardId);
+  }
 }
 
 function handleWorkerStatus(ws: WebSocket, msg: WsMessage): void {
   const { cardId } = msg;
   if (cardId) {
-    const status = processManager.getWorkerStatus(cardId);
+    // Check both local and containerized workers
+    const localStatus = processManager.getWorkerStatus(cardId);
+    const hasContainer = workerWsManager.hasWorker(cardId, 'card');
+    const status = localStatus !== 'none' ? localStatus : (hasContainer ? 'idle' : 'none');
     ws.send(JSON.stringify({ type: 'worker:status', cardId, status }));
   } else {
     const statuses = processManager.getAllWorkerStatuses();
@@ -115,7 +142,7 @@ function handleWorkerStatus(ws: WebSocket, msg: WsMessage): void {
   }
 }
 
-function handleEvalRun(ws: WebSocket, msg: WsMessage): void {
+async function handleEvalRun(ws: WebSocket, msg: WsMessage): Promise<void> {
   const { cardId } = msg;
   if (!cardId) {
     ws.send(JSON.stringify({ type: 'error', error: 'cardId required' }));
@@ -149,6 +176,25 @@ function handleEvalRun(ws: WebSocket, msg: WsMessage): void {
       })
     );
     return;
+  }
+
+  // If a DevEnvironment exists for this card, start eval worker inside it
+  const env = devEnvironmentManager.getEnvironment(cardId);
+  if (env && env.status === 'ready') {
+    try {
+      await workerRunner.start(env, 'eval', { cardId });
+      // The eval worker will connect via WS and receive its context from the host
+      // We still need to send the eval context through the WS connection once it registers
+      // For now, use local eval process manager as the eval context assembly is coupled there
+      // TODO: Decouple eval context assembly from EvalProcessManager in future iteration
+      const started = evalProcessManager.runEval(cardId, branchDir);
+      if (!started) {
+        ws.send(JSON.stringify({ type: 'eval:error', cardId, error: 'Failed to start evaluation' }));
+      }
+      return;
+    } catch (err) {
+      console.warn(`[ChatHandler] Failed to start eval in DevEnvironment, falling back to local:`, err);
+    }
   }
 
   const started = evalProcessManager.runEval(cardId, branchDir);

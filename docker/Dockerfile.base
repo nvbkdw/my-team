@@ -1,0 +1,35 @@
+FROM node:20-slim
+
+# Install essential tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    jq \
+    ripgrep \
+    procps \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install tsx globally for running TypeScript workers
+RUN npm install -g tsx
+
+# Create app directory for worker code
+WORKDIR /app
+
+# Copy worker code and shared utilities
+# These are baked into the image so workers can run without mounting server source
+COPY server/src/worker/ /app/worker/
+COPY server/src/utils/ /app/utils/
+COPY server/src/config.ts /app/config.ts
+COPY server/package.json /app/package.json
+COPY server/tsconfig.json /app/tsconfig.json
+COPY tsconfig.base.json /app/../tsconfig.base.json
+
+# Install production dependencies for workers
+RUN npm install --omit=dev
+
+# tini as PID 1 for proper signal handling
+ENTRYPOINT ["tini", "--"]
+
+# Default command: keep container alive (all work via docker exec)
+CMD ["tail", "-f", "/dev/null"]

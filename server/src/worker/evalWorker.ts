@@ -1,14 +1,15 @@
 /**
- * Eval Worker - forked child process that runs a one-shot Claude evaluation session.
+ * Eval Worker - runs a one-shot Claude evaluation session.
  * Reads eval criteria, runs verification, and writes results to a markdown file.
  *
- * Communication with main process via Node IPC (process.send / process.on('message'))
+ * Communication with host via WorkerTransport (IPC when fork()-ed, WebSocket in containers).
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { ClaudeRunner } from './claudeRunner.js';
+import { createTransport, type WorkerTransport } from './transport.js';
 
 interface WorkerConfig {
   cardId: string;
@@ -28,10 +29,10 @@ type MainToEvalWorker =
   | { type: 'eval:start'; context: EvalContext }
   | { type: 'shutdown' };
 
-function send(msg: unknown): void {
-  if (process.send) {
-    process.send(msg);
-  }
+const transport: WorkerTransport = createTransport();
+
+function send(msg: Record<string, unknown>): void {
+  transport.send(msg);
 }
 
 const config: WorkerConfig = {
@@ -46,16 +47,18 @@ if (!config.cardId || !config.branchDir) {
 
 const claudeRunner = new ClaudeRunner({ cwd: config.branchDir, cardId: `eval-${config.cardId}` });
 
-process.on('message', (msg: MainToEvalWorker) => {
-  switch (msg.type) {
+// Handle messages from host (via IPC or WebSocket)
+transport.onMessage = (msg: Record<string, unknown>) => {
+  const typed = msg as unknown as MainToEvalWorker;
+  switch (typed.type) {
     case 'eval:start':
-      handleEvalStart(msg.context);
+      handleEvalStart(typed.context);
       break;
     case 'shutdown':
       handleShutdown();
       break;
   }
-});
+};
 
 function buildEvalPrompt(ctx: EvalContext): string {
   const parts: string[] = [];
@@ -168,6 +171,7 @@ function gracefulExit(code: number): void {
   }
   // Kill any child processes we spawned
   killOwnChildren();
+  transport.close();
   setTimeout(() => process.exit(code), 1000);
 }
 
@@ -185,6 +189,7 @@ function handleShutdown(): void {
   }
   killOwnChildren();
   send({ type: 'eval:status', status: 'complete' });
+  transport.close();
   setTimeout(() => process.exit(0), 1000);
 }
 
