@@ -17,6 +17,7 @@ interface MergedToolItem {
   ts: string;
   run: number;
   pending: boolean;
+  isEval: boolean;
 }
 
 // A pass-through non-tool entry
@@ -27,8 +28,10 @@ interface PassthroughItem {
 
 type DisplayItem = MergedToolItem | PassthroughItem;
 
+const EMPTY_ENTRIES: TraceEntry[] = [];
+
 export default function HistoryPanel({ cardId }: HistoryPanelProps) {
-  const entries = useHistoryStore((s) => s.entries[cardId] ?? []);
+  const entries = useHistoryStore((s) => s.entries[cardId] ?? EMPTY_ENTRIES);
   const loading = useHistoryStore((s) => s.loading[cardId] ?? false);
   const initialized = useHistoryStore((s) => s.initialized[cardId] ?? false);
   const [selectedRun, setSelectedRun] = useState<number | null>(null);
@@ -167,10 +170,10 @@ export default function HistoryPanel({ cardId }: HistoryPanelProps) {
 // ---------------------------------------------------------------------------
 
 function mergeToolEntries(entries: TraceEntry[]): DisplayItem[] {
-  // Build a map of toolUseId → tool_result entry
+  // Build a map of toolUseId → tool_result / eval_tool_result entry
   const resultMap = new Map<string, TraceEntry>();
   for (const e of entries) {
-    if (e.type === 'tool_result' && e.toolUseId) {
+    if ((e.type === 'tool_result' || e.type === 'eval_tool_result') && e.toolUseId) {
       resultMap.set(e.toolUseId as string, e);
     }
   }
@@ -179,7 +182,7 @@ function mergeToolEntries(entries: TraceEntry[]): DisplayItem[] {
   const items: DisplayItem[] = [];
 
   for (const entry of entries) {
-    if (entry.type === 'tool_use') {
+    if (entry.type === 'tool_use' || entry.type === 'eval_tool_use') {
       const toolUseId = (entry.toolUseId as string) ?? '';
       const name = (entry.name as string) ?? 'unknown';
       const resultEntry = toolUseId ? resultMap.get(toolUseId) : undefined;
@@ -195,8 +198,9 @@ function mergeToolEntries(entries: TraceEntry[]): DisplayItem[] {
         ts: entry.ts,
         run: entry.run,
         pending: !resultEntry,
+        isEval: entry.type === 'eval_tool_use',
       });
-    } else if (entry.type === 'tool_result') {
+    } else if (entry.type === 'tool_result' || entry.type === 'eval_tool_result') {
       // Skip if already consumed by a merged tool item
       const id = (entry.toolUseId as string) ?? '';
       if (consumedResultIds.has(id)) continue;
@@ -342,6 +346,7 @@ function ToolRow({ item }: { item: MergedToolItem }) {
         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${
           item.pending ? 'bg-amber-400 animate-pulse' : 'bg-green-400'
         }`} />
+        {item.isEval && <EvalBadge />}
         <span className="font-medium text-amber-700 dark:text-amber-400 font-mono shrink-0">
           {item.name}
         </span>
@@ -511,6 +516,7 @@ function EntryRow({ entry }: { entry: TraceEntry }) {
 
     // Orphaned tool_result (no matching tool_use)
     case 'tool_result':
+    case 'eval_tool_result':
       return (
         <div className="py-0.5">
           <button
@@ -519,6 +525,7 @@ function EntryRow({ entry }: { entry: TraceEntry }) {
           >
             <ChevronIcon expanded={expanded} />
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" />
+            {entry.type.startsWith('eval_') && <EvalBadge />}
             <span className="font-medium text-green-700 dark:text-green-400 font-mono">
               {entry.name as string}
             </span>
@@ -530,6 +537,94 @@ function EntryRow({ entry }: { entry: TraceEntry }) {
               {truncateDisplay(entry.result as string)}
             </pre>
           )}
+        </div>
+      );
+
+    case 'eval_status_change':
+      return (
+        <div className="flex items-center gap-1.5 py-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+          <EvalBadge />
+          <span className="inline-block h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+          <span>Status: {entry.status as string}</span>
+          <span>{formatTime(entry.ts)}</span>
+        </div>
+      );
+
+    case 'eval_system_init':
+      return (
+        <div className="flex items-center gap-2 py-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+          <EvalBadge />
+          <span className="font-mono">sys</span>
+          <span>{entry.model as string}</span>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
+          <span>{(entry.tools as string[])?.length ?? 0} tools</span>
+        </div>
+      );
+
+    case 'eval_assistant_text':
+      return (
+        <div className="border-l-2 border-teal-200 dark:border-teal-700 pl-2 py-0.5">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 w-full text-left"
+          >
+            <ChevronIcon expanded={expanded} />
+            <EvalBadge />
+            <span className="font-medium shrink-0">Assistant</span>
+            <span className="text-gray-400 dark:text-gray-500 truncate min-w-0">
+              {truncateInline(String(entry.text ?? ''), 80)}
+            </span>
+            <span className="text-gray-400 dark:text-gray-500 shrink-0 ml-auto">{formatTime(entry.ts)}</span>
+          </button>
+          {expanded && (
+            <pre className="mt-1 text-[11px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap max-h-60 overflow-y-auto bg-teal-50 dark:bg-teal-900/10 rounded p-2">
+              {entry.text as string}
+            </pre>
+          )}
+        </div>
+      );
+
+    case 'eval_run_end':
+      return (
+        <div className="flex items-center gap-2 py-1 text-[11px] text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800 mb-1">
+          <EvalBadge />
+          <span className="font-medium">Done</span>
+          {entry.costUsd != null && (
+            <span>${(entry.costUsd as number).toFixed(4)}</span>
+          )}
+          {entry.numTurns != null && (
+            <span>{entry.numTurns as number} turns</span>
+          )}
+          {entry.durationMs != null && (
+            <span>{((entry.durationMs as number) / 1000).toFixed(1)}s</span>
+          )}
+        </div>
+      );
+
+    case 'eval_complete':
+      return (
+        <div className="flex items-center gap-1.5 py-0.5">
+          <EvalBadge />
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+            COMPLETE
+          </span>
+          <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+            {entry.summary as string}
+          </span>
+          <span className="text-gray-400 dark:text-gray-500 text-[10px] shrink-0 ml-auto">{formatTime(entry.ts)}</span>
+        </div>
+      );
+
+    case 'eval_error':
+      return (
+        <div className="flex items-center gap-1.5 py-0.5">
+          <EvalBadge />
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
+            ERROR
+          </span>
+          <span className="text-[11px] text-red-600 dark:text-red-400 truncate">
+            {entry.error as string}
+          </span>
         </div>
       );
 
@@ -545,6 +640,14 @@ function EntryRow({ entry }: { entry: TraceEntry }) {
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+function EvalBadge() {
+  return (
+    <span className="px-1 py-px text-[9px] font-semibold uppercase tracking-wider bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 rounded shrink-0">
+      eval
+    </span>
+  );
+}
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (

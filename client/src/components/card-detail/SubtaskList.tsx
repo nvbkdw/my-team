@@ -9,6 +9,8 @@ import {
 
 interface SubtaskListProps {
   cardId: string;
+  section?: string;
+  sectionLabel?: string;
 }
 
 interface SubtaskNode extends Subtask {
@@ -45,7 +47,8 @@ function countCompleted(nodes: SubtaskNode[]): { total: number; done: number } {
   return { total, done };
 }
 
-export default function SubtaskList({ cardId }: SubtaskListProps) {
+export default function SubtaskList({ cardId, section, sectionLabel }: SubtaskListProps) {
+  const label = sectionLabel ?? 'Tasks';
   const [items, setItems] = useState<Subtask[]>([]);
   const [sectionOpen, setSectionOpen] = useState(true);
   const [hideCompleted, setHideCompleted] = useState(false);
@@ -58,7 +61,7 @@ export default function SubtaskList({ cardId }: SubtaskListProps) {
 
   const loadSubtasks = async () => {
     try {
-      const data = await fetchSubtasks(cardId);
+      const data = await fetchSubtasks(cardId, section);
       setItems(data);
     } catch {
       // endpoint may not exist yet
@@ -79,6 +82,7 @@ export default function SubtaskList({ cardId }: SubtaskListProps) {
       const created = await createSubtask(cardId, {
         title,
         parent_id: parentId ?? null,
+        ...(section ? { section } : {}),
       });
       setItems((prev) => [...prev, created]);
       // Auto-expand parent so the new child is visible
@@ -154,7 +158,7 @@ export default function SubtaskList({ cardId }: SubtaskListProps) {
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-          Tasks
+          {label}
         </button>
         {total > 0 && (
           <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
@@ -194,7 +198,7 @@ export default function SubtaskList({ cardId }: SubtaskListProps) {
           <div className="pl-[26px]">
             <InlineAdd
               onAdd={(title) => handleCreate(title)}
-              placeholder="Add sub-task..."
+              placeholder={`Add ${label.toLowerCase().replace(/s$/, '')}...`}
             />
           </div>
         </div>

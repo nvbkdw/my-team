@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { config } from '../config.js';
+import { evalProcessManager } from './EvalProcessManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -106,10 +107,36 @@ export class ProcessManager extends EventEmitter {
     });
 
     // Handle IPC messages from worker
-    child.on('message', (msg: WorkerEvent) => {
+    child.on('message', (msg: Record<string, unknown>) => {
+      // Handle eval:request from the main card worker
+      if (msg.type === 'eval:request') {
+        console.log(`[ProcessManager] Card worker ${cardId} requested eval run`);
+        evalProcessManager.runEval(cardId, branchDir);
+
+        // Listen for eval completion and forward result back to the card worker
+        const onEvalEvent = (evalCardId: string, event: Record<string, unknown>) => {
+          if (evalCardId === cardId && event.type === 'eval:complete') {
+            try {
+              child.send({
+                type: 'eval:result',
+                cardId,
+                filename: event.filename,
+                summary: event.summary,
+                resultFilePath: event.resultFilePath,
+              });
+            } catch {
+              // worker may have exited
+            }
+            evalProcessManager.removeListener('eval:event', onEvalEvent);
+          }
+        };
+        evalProcessManager.on('eval:event', onEvalEvent);
+        return;
+      }
+
       if (msg.type === 'status') {
         workerInfo.status = msg.status as 'idle' | 'running' | 'error';
-        if (msg.error) workerInfo.lastError = msg.error;
+        if (msg.error) workerInfo.lastError = msg.error as string;
       }
       // Emit event so WebSocket handler can forward to clients
       this.emit('worker:event', cardId, msg);

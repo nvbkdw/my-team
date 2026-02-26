@@ -78,4 +78,11 @@ export function initializeDatabase(): void {
       value TEXT
     );
   `);
+
+  // Migrations: add eval columns to cards
+  try { db.exec(`ALTER TABLE cards ADD COLUMN eval_env_setup TEXT DEFAULT ''`); } catch {}
+  try { db.exec(`ALTER TABLE cards ADD COLUMN eval_verification TEXT DEFAULT ''`); } catch {}
+
+  // Migrations: add section column to card_subtasks
+  try { db.exec(`ALTER TABLE card_subtasks ADD COLUMN section TEXT DEFAULT 'spec'`); } catch {}
 }

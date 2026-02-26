@@ -23,6 +23,7 @@ type MainToWorker =
   | { type: 'chat:send'; message: string; context?: CardContext }
   | { type: 'chat:abort' }
   | { type: 'config:update'; config: Partial<WorkerConfig> }
+  | { type: 'eval:result'; cardId: string; filename: string; summary: string; resultFilePath: string }
   | { type: 'shutdown' };
 
 function send(msg: unknown): void {
@@ -67,6 +68,10 @@ process.on('message', (msg: MainToWorker) => {
       break;
     case 'config:update':
       Object.assign(config, msg.config);
+      break;
+    case 'eval:result':
+      console.log(`[CardWorker] Eval completed for card ${msg.cardId}: ${msg.summary}`);
+      console.log(`[CardWorker] Eval result file: ${msg.resultFilePath}`);
       break;
     case 'shutdown':
       handleShutdown();

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 type WorkerStatus = 'none' | 'idle' | 'running' | 'error';
+type EvalStatus = 'none' | 'running' | 'complete' | 'error';
 
 interface WorkerState {
   statuses: Record<string, WorkerStatus>;
@@ -8,6 +9,7 @@ interface WorkerState {
   streamingText: Record<string, string>;
   isStreaming: Record<string, boolean>;
   commentsVersion: Record<string, number>;
+  evalStatuses: Record<string, EvalStatus>;
 
   setWorkerStatus: (cardId: string, status: WorkerStatus, error?: string) => void;
   setAllStatuses: (statuses: Record<string, { status: string }>) => void;
@@ -17,6 +19,7 @@ interface WorkerState {
   appendStreamingText: (cardId: string, text: string) => void;
   clearStreaming: (cardId: string) => void;
   notifyCommentsChanged: (cardId: string) => void;
+  setEvalStatus: (cardId: string, status: EvalStatus) => void;
 }
 
 export const useWorkerStore = create<WorkerState>((set, get) => ({
@@ -25,6 +28,7 @@ export const useWorkerStore = create<WorkerState>((set, get) => ({
   streamingText: {},
   isStreaming: {},
   commentsVersion: {},
+  evalStatuses: {},
 
   setWorkerStatus: (cardId: string, status: WorkerStatus, error?: string) => {
     set((s) => ({
@@ -91,6 +95,12 @@ export const useWorkerStore = create<WorkerState>((set, get) => ({
         ...s.commentsVersion,
         [cardId]: (s.commentsVersion[cardId] || 0) + 1,
       },
+    }));
+  },
+
+  setEvalStatus: (cardId: string, status: EvalStatus) => {
+    set((s) => ({
+      evalStatuses: { ...s.evalStatuses, [cardId]: status },
     }));
   },
 }));

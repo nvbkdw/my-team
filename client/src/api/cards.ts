@@ -23,7 +23,7 @@ export function createCard(data: {
 
 export function updateCard(
   id: string,
-  data: Partial<Pick<Card, 'title' | 'description' | 'status' | 'repo_id' | 'branch_name' | 'branch_dir' | 'pr_number' | 'pr_url' | 'pr_state'>>,
+  data: Partial<Pick<Card, 'title' | 'description' | 'status' | 'repo_id' | 'branch_name' | 'branch_dir' | 'pr_number' | 'pr_url' | 'pr_state' | 'eval_env_setup' | 'eval_verification'>>,
 ): Promise<Card> {
   return apiFetch<Card>(`/cards/${id}`, {
     method: 'PATCH',

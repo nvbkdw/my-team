@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
+import { evalProcessManager } from '../services/EvalProcessManager.js';
 import { db } from '../db/connection.js';
 
 export interface CardContext {
@@ -35,6 +36,9 @@ export function setupChatHandler(ws: WebSocket): void {
         break;
       case 'chat:abort':
         handleChatAbort(ws, msg);
+        break;
+      case 'eval:run':
+        handleEvalRun(ws, msg);
         break;
       case 'worker:status':
         handleWorkerStatus(ws, msg);
@@ -102,6 +106,50 @@ function handleWorkerStatus(ws: WebSocket, msg: WsMessage): void {
   } else {
     const statuses = processManager.getAllWorkerStatuses();
     ws.send(JSON.stringify({ type: 'worker:statuses', statuses }));
+  }
+}
+
+function handleEvalRun(ws: WebSocket, msg: WsMessage): void {
+  const { cardId } = msg;
+  if (!cardId) {
+    ws.send(JSON.stringify({ type: 'error', error: 'cardId required' }));
+    return;
+  }
+
+  // Get branch_dir from the card
+  const card = db
+    .prepare('SELECT branch_dir, repo_id FROM cards WHERE id = ?')
+    .get(cardId) as { branch_dir: string | null; repo_id: string | null } | undefined;
+
+  if (!card) {
+    ws.send(JSON.stringify({ type: 'eval:error', cardId, error: 'Card not found' }));
+    return;
+  }
+
+  let branchDir = card.branch_dir;
+  if (!branchDir && card.repo_id) {
+    const repo = db.prepare('SELECT local_path FROM repos WHERE id = ?').get(card.repo_id) as
+      | { local_path: string }
+      | undefined;
+    branchDir = repo?.local_path ?? null;
+  }
+
+  if (!branchDir) {
+    ws.send(
+      JSON.stringify({
+        type: 'eval:error',
+        cardId,
+        error: 'No branch directory available. Move card to "In Progress" first.',
+      })
+    );
+    return;
+  }
+
+  const started = evalProcessManager.runEval(cardId, branchDir);
+  if (!started) {
+    ws.send(
+      JSON.stringify({ type: 'eval:error', cardId, error: 'Failed to start evaluation' })
+    );
   }
 }
 

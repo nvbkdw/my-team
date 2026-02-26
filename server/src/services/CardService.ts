@@ -27,6 +27,8 @@ export interface CreateCardData {
 export interface UpdateCardData {
   title?: string;
   description?: string;
+  eval_env_setup?: string;
+  eval_verification?: string;
   repo_id?: string | null;
   status?: Card['status'];
   branch_name?: string | null;

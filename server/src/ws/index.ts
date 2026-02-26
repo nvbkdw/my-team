@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { processManager } from '../services/ProcessManager.js';
 import { devServerManager } from '../services/DevServerManager.js';
+import { evalProcessManager } from '../services/EvalProcessManager.js';
 import { db } from '../db/connection.js';
 import { setupChatHandler } from './chatHandler.js';
 
@@ -88,6 +89,25 @@ export function setupWebSocket(server: HttpServer): WebSocketServer {
 
   devServerManager.on('devserver:exit', (cardId: string, code: number) => {
     const message = JSON.stringify({ type: 'devserver:exit', cardId, code });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  // Bridge EvalProcessManager events to all connected WebSocket clients
+  evalProcessManager.on('eval:event', (cardId: string, event: Record<string, unknown>) => {
+    const message = JSON.stringify({ ...event, cardId });
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    }
+  });
+
+  evalProcessManager.on('eval:exit', (cardId: string, code: number) => {
+    const message = JSON.stringify({ type: 'eval:exit', cardId, code });
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);

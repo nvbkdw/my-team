@@ -8,6 +8,7 @@ export interface Subtask {
   title: string;
   completed: number;
   position: number;
+  section: string;
   created_at: string;
   updated_at: string;
 }
@@ -16,6 +17,7 @@ export interface CreateSubtaskData {
   card_id: string;
   parent_id?: string | null;
   title: string;
+  section?: string;
 }
 
 export interface UpdateSubtaskData {
@@ -25,7 +27,13 @@ export interface UpdateSubtaskData {
 }
 
 export const SubtaskService = {
-  getByCardId(cardId: string): Subtask[] {
+  getByCardId(cardId: string, section?: string): Subtask[] {
+    if (section) {
+      const stmt = db.prepare(
+        'SELECT * FROM card_subtasks WHERE card_id = ? AND section = ? ORDER BY position ASC'
+      );
+      return stmt.all(cardId, section) as Subtask[];
+    }
     const stmt = db.prepare(
       'SELECT * FROM card_subtasks WHERE card_id = ? ORDER BY position ASC'
     );
@@ -51,9 +59,11 @@ export const SubtaskService = {
 
     const position = maxPosRow.maxPos + 1;
 
+    const section = data.section ?? 'spec';
+
     db.prepare(
-      'INSERT INTO card_subtasks (id, card_id, parent_id, title, position) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, data.card_id, parentId, data.title, position);
+      'INSERT INTO card_subtasks (id, card_id, parent_id, title, position, section) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(id, data.card_id, parentId, data.title, position, section);
 
     return SubtaskService.getById(id)!;
   },

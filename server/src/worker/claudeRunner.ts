@@ -58,6 +58,7 @@ export class ClaudeRunner {
           cwd: this.options.cwd,
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
+          allowedTools: ['Skill(dev-browser:dev-browser)'],
           includePartialMessages: true,
           settingSources: ['project'],
           maxTurns: 50,

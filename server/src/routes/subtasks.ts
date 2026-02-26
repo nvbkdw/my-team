@@ -5,10 +5,11 @@ import { param } from '../utils/params.js';
 
 const router = Router({ mergeParams: true });
 
-// GET /api/cards/:id/subtasks
+// GET /api/cards/:id/subtasks?section=spec
 router.get('/', (req: Request, res: Response, next: NextFunction) => {
   try {
-    const subtasks = SubtaskService.getByCardId(param(req, 'id'));
+    const section = req.query.section as string | undefined;
+    const subtasks = SubtaskService.getByCardId(param(req, 'id'), section);
     res.json(subtasks);
   } catch (err) {
     next(err);
@@ -18,7 +19,7 @@ router.get('/', (req: Request, res: Response, next: NextFunction) => {
 // POST /api/cards/:id/subtasks
 router.post('/', (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { title, parent_id } = req.body;
+    const { title, parent_id, section } = req.body;
     if (!title || typeof title !== 'string') {
       res.status(400).json({ error: 'title is required' });
       return;
@@ -27,6 +28,7 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
       card_id: param(req, 'id'),
       parent_id: parent_id || null,
       title,
+      section: section || undefined,
     });
     res.status(201).json(subtask);
   } catch (err) {

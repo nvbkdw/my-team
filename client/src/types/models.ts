@@ -5,6 +5,8 @@ export interface Card {
   repo_id: string | null;
   title: string;
   description: string;
+  eval_env_setup: string;
+  eval_verification: string;
   status: CardStatus;
   branch_name: string | null;
   branch_dir: string | null;
@@ -50,6 +52,7 @@ export interface Subtask {
   title: string;
   completed: number;
   position: number;
+  section: string;
   created_at: string;
   updated_at: string;
 }

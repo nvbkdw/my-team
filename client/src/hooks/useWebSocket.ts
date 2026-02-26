@@ -193,6 +193,91 @@ function dispatchMessage(msg: Record<string, unknown>) {
       }
       break;
 
+    case 'eval:status':
+      if (cardId) {
+        useWorkerStore.getState().setEvalStatus(
+          cardId,
+          msg.status as 'none' | 'running' | 'complete' | 'error'
+        );
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_status_change',
+          status: msg.status,
+        });
+      }
+      break;
+
+    case 'eval:system_init':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_system_init',
+          sessionId: msg.sessionId, model: msg.model, tools: msg.tools,
+        });
+      }
+      break;
+
+    case 'eval:assistant_text':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_assistant_text',
+          text: msg.text,
+        });
+      }
+      break;
+
+    case 'eval:tool_use':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_tool_use',
+          name: msg.name, input: msg.input, toolUseId: msg.toolUseId,
+        });
+      }
+      break;
+
+    case 'eval:tool_result':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_tool_result',
+          name: msg.name, result: msg.result, toolUseId: msg.toolUseId,
+        });
+      }
+      break;
+
+    case 'eval:result_stats':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_run_end',
+          costUsd: msg.costUsd, numTurns: msg.numTurns, durationMs: msg.durationMs,
+        });
+      }
+      break;
+
+    case 'eval:complete':
+      if (cardId) {
+        useWorkerStore.getState().setEvalStatus(cardId, 'complete');
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_complete',
+          filename: msg.filename, summary: msg.summary,
+        });
+      }
+      break;
+
+    case 'eval:error':
+      if (cardId) {
+        useWorkerStore.getState().setEvalStatus(cardId, 'error');
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'eval_error',
+          error: msg.error,
+        });
+      }
+      console.warn('[WS] Eval error:', msg.error);
+      break;
+
+    case 'eval:token':
+    case 'eval:ready':
+    case 'eval:exit':
+      // Streaming tokens and lifecycle events — no history entry needed
+      break;
+
     case 'pong':
       break;
 
@@ -259,5 +344,12 @@ export function useWebSocket() {
     [sendMessage]
   );
 
-  return { sendChatMessage, abortChat, sendMessage };
+  const sendEvalRun = useCallback(
+    (cardId: string) => {
+      sendMessage('eval:run', { cardId });
+    },
+    [sendMessage]
+  );
+
+  return { sendChatMessage, abortChat, sendMessage, sendEvalRun };
 }
