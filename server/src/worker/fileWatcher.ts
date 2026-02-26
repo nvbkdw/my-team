@@ -1,14 +1,21 @@
-import { watch, FSWatcher } from 'node:fs';
+import { watch, FSWatcher, readFileSync } from 'node:fs';
 import path from 'node:path';
+import ignore, { type Ignore } from 'ignore';
 
 const DEBOUNCE_MS = 500;
-const IGNORED_PATTERNS = [
-  /node_modules/,
-  /\.git/,
-  /\.worktrees/,
-  /\.DS_Store/,
-  /dist\//,
-];
+const ALWAYS_IGNORED = ['.git', '.worktrees', 'node_modules', '.DS_Store', 'dist', 'build', '.next', '__pycache__', '.cache', 'coverage', '.turbo'];
+
+function loadGitignore(dir: string): Ignore {
+  const ig = ignore();
+  ig.add(ALWAYS_IGNORED);
+  try {
+    const raw = readFileSync(path.join(dir, '.gitignore'), 'utf-8');
+    ig.add(raw);
+  } catch {
+    // No .gitignore found — fall back to always-ignored only
+  }
+  return ig;
+}
 
 export class FileWatcher {
   private watcher: FSWatcher | null = null;
@@ -16,10 +23,12 @@ export class FileWatcher {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private onChange: (files: string[]) => void;
   private dir: string;
+  private ig: Ignore;
 
   constructor(dir: string, onChange: (files: string[]) => void) {
     this.dir = dir;
     this.onChange = onChange;
+    this.ig = loadGitignore(dir);
   }
 
   start(): void {
@@ -28,7 +37,7 @@ export class FileWatcher {
     try {
       this.watcher = watch(this.dir, { recursive: true }, (_event, filename) => {
         if (!filename) return;
-        if (IGNORED_PATTERNS.some((p) => p.test(filename))) return;
+        if (this.ig.ignores(filename)) return;
 
         this.pendingFiles.add(filename);
         this.scheduleFlush();
