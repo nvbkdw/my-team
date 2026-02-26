@@ -8,6 +8,7 @@
 import { ClaudeRunner } from './claudeRunner.js';
 import { FileWatcher } from './fileWatcher.js';
 import { TraceLogger } from '../utils/traceLogger.js';
+import { readSpecFile } from '../utils/specFile.js';
 import { createTransport, type WorkerTransport } from './transport.js';
 
 interface WorkerConfig {
@@ -111,9 +112,17 @@ async function handleChatSend(message: string, context?: CardContext): Promise<v
 
   // On first message (new session), inject card context into the prompt.
   // On resumed sessions, Claude already has the prior context.
-  const prompt = !sdkSessionId && context
-    ? buildContextPrompt(message, context)
-    : message;
+  let prompt: string;
+  if (!sdkSessionId && context) {
+    const specContent = readSpecFile(config.cardId);
+    const enrichedContext: CardContext = {
+      ...context,
+      description: specContent ?? context.description,
+    };
+    prompt = buildContextPrompt(message, enrichedContext);
+  } else {
+    prompt = message;
+  }
 
   traceLogger.logRunStart(message);
 

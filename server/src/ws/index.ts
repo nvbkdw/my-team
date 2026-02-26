@@ -7,13 +7,31 @@ import { evalProcessManager } from '../services/EvalProcessManager.js';
 import { prProcessManager } from '../services/PRProcessManager.js';
 import { db } from '../db/connection.js';
 import { setupChatHandler } from './chatHandler.js';
-import { setupWorkerWebSocket, workerWsManager } from './workerWsHandler.js';
+import { createWorkerWebSocketServer, workerWsManager } from './workerWsHandler.js';
 
 export function setupWebSocket(server: HttpServer): WebSocketServer {
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  // Both WSS use noServer mode to avoid the ws library bug where multiple
+  // server-bound WebSocketServers abort each other's upgrade handshakes.
+  // See: https://github.com/websockets/ws#multiple-servers-sharing-a-single-https-server
+  const wss = new WebSocketServer({ noServer: true });
+  const workerWss = createWorkerWebSocketServer();
 
-  // Set up /ws/worker endpoint for containerized workers
-  setupWorkerWebSocket(server);
+  // Single upgrade handler routes to the correct WSS by pathname
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url!, `http://${request.headers.host}`);
+
+    if (pathname === '/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/worker') {
+      workerWss.handleUpgrade(request, socket, head, (ws) => {
+        workerWss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
 
   const clients = new Set<WebSocket>();
 

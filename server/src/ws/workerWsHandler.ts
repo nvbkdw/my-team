@@ -7,7 +7,6 @@
  * ProcessManager/EvalProcessManager event system.
  */
 
-import { Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { EventEmitter } from 'node:events';
 
@@ -65,10 +64,11 @@ class WorkerWsManager extends EventEmitter {
 export const workerWsManager = new WorkerWsManager();
 
 /**
- * Set up the /ws/worker WebSocket server for container workers.
+ * Create the /ws/worker WebSocket server for container workers.
+ * Uses noServer mode — the caller must route 'upgrade' events to wss.handleUpgrade().
  */
-export function setupWorkerWebSocket(server: HttpServer): WebSocketServer {
-  const wss = new WebSocketServer({ server, path: '/ws/worker' });
+export function createWorkerWebSocketServer(): WebSocketServer {
+  const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (ws, req) => {
     console.log(`[WorkerWS] Worker connected from ${req.socket.remoteAddress}`);
@@ -131,6 +131,6 @@ export function setupWorkerWebSocket(server: HttpServer): WebSocketServer {
     });
   });
 
-  console.log('[WorkerWS] Worker WebSocket server ready at /ws/worker');
+  console.log('[WorkerWS] Worker WebSocket server created (noServer mode)');
   return wss;
 }

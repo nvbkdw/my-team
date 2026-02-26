@@ -9,6 +9,7 @@ import { devEnvironmentManager } from '../services/devenv/DevEnvironmentManager.
 import { workerRunner } from '../services/WorkerRunner.js';
 import { workerWsManager } from './workerWsHandler.js';
 import { db } from '../db/connection.js';
+import { readSpecFile } from '../utils/specFile.js';
 
 export interface CardContext {
   description: string;
@@ -294,12 +295,14 @@ function buildCardContext(cardId: string): CardContext {
     | { description: string }
     | undefined;
 
+  const specFromFile = readSpecFile(cardId);
+
   const comments = db
     .prepare('SELECT author, body, created_at FROM card_comments WHERE card_id = ? ORDER BY created_at ASC')
     .all(cardId) as Array<{ author: string; body: string; created_at: string }>;
 
   return {
-    description: card?.description ?? '',
+    description: specFromFile ?? card?.description ?? '',
     comments,
   };
 }

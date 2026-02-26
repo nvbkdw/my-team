@@ -9,6 +9,7 @@ import { processManager } from '../services/ProcessManager.js';
 import { devEnvironmentManager } from '../services/devenv/DevEnvironmentManager.js';
 import { db } from '../db/connection.js';
 import { param } from '../utils/params.js';
+import { writeSpecFile } from '../utils/specFile.js';
 import subtasksRouter from './subtasks.js';
 
 const router = Router();
@@ -94,6 +95,9 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
       return;
     }
     const card = CardService.create({ title, description, repo_id, status });
+    if (description) {
+      writeSpecFile(card.id, card.description);
+    }
     res.status(201).json(card);
   } catch (err) {
     next(err);
@@ -107,6 +111,9 @@ router.patch('/:id', (req: Request, res: Response, next: NextFunction) => {
     if (!card) {
       res.status(404).json({ error: 'Card not found' });
       return;
+    }
+    if (req.body.description !== undefined) {
+      writeSpecFile(card.id, card.description);
     }
     res.json(card);
   } catch (err) {

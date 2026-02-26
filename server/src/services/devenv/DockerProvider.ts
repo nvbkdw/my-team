@@ -7,6 +7,8 @@
  */
 
 import Dockerode from 'dockerode';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { config } from '../../config.js';
 import type {
@@ -291,10 +293,59 @@ export class DockerProvider implements DevEnvironmentProvider {
     });
   }
 
+  /** Build a Docker image on demand if it doesn't exist locally. */
+  private async ensureImage(imageName: string): Promise<void> {
+    // Check if image already exists
+    const images = await this.docker.listImages({
+      filters: { reference: [imageName] },
+    });
+    if (images.length > 0) return;
+
+    // Reverse-lookup: find the suffix key for this image name
+    const entries = Object.entries(config.devenv.docker.images) as [string, string][];
+    const entry = entries.find(([, img]) => img === imageName);
+    if (!entry) {
+      throw new Error(`[DockerProvider] Unknown image "${imageName}" — cannot auto-build. Known images: ${entries.map(([k, v]) => `${k}=${v}`).join(', ')}`);
+    }
+    const suffix = entry[0]; // e.g. 'base', 'node', 'full'
+
+    // Resolve project root (4 dirs up from server/src/services/devenv/DockerProvider.ts)
+    const projectRoot = new URL('../../../..', import.meta.url).pathname;
+    const dockerfile = `docker/Dockerfile.${suffix}`;
+
+    if (!existsSync(`${projectRoot}/${dockerfile}`)) {
+      throw new Error(`[DockerProvider] Dockerfile not found: ${dockerfile}`);
+    }
+
+    // Dependency chain: non-base images FROM my-team-base, so build base first
+    if (suffix !== 'base') {
+      await this.ensureImage(config.devenv.docker.images.base);
+    }
+
+    console.log(`[DockerProvider] Building image ${imageName} from ${dockerfile}...`);
+    execFileSync('docker', ['build', '-f', dockerfile, '-t', imageName, '.'], {
+      cwd: projectRoot,
+      stdio: 'inherit',
+    });
+    console.log(`[DockerProvider] Image ${imageName} built successfully.`);
+  }
+
   async create(envConfig: DevEnvConfig): Promise<DevEnvironment> {
     const { cardId, repoPath, branchDir, image, resources } = envConfig;
     const containerName = `devenv-${cardId}`;
     const resolvedImage = image || config.devenv.docker.images.base;
+
+    // Auto-build image if it doesn't exist locally
+    await this.ensureImage(resolvedImage);
+
+    // Remove any stale container with the same name (e.g. from a previous crash)
+    try {
+      const existing = this.docker.getContainer(containerName);
+      await existing.remove({ force: true });
+      console.log(`[DockerProvider] Removed stale container ${containerName}`);
+    } catch {
+      // No existing container — expected path
+    }
 
     // Allocate ports for dev server mappings
     const { portsPerEnvironment } = config.devenv.docker;
