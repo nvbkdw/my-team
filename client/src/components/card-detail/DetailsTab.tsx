@@ -1,12 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Card } from '../../types/models.js';
 import { useBoardStore } from '../../stores/boardStore.js';
 import { useWebSocket } from '../../hooks/useWebSocket.js';
 import { useWorkerStore } from '../../stores/workerStore.js';
+import { useHistoryStore } from '../../stores/historyStore.js';
+import { apiFetch } from '../../api/client.js';
 import BranchInfo from './BranchInfo.js';
 import LabelManager from './LabelManager.js';
 import SubtaskList from './SubtaskList.js';
 import CommentsList from './CommentsList.js';
+import MarkdownContent from '../ui/MarkdownContent.js';
 
 interface DetailsTabProps {
   card: Card;
@@ -14,10 +17,75 @@ interface DetailsTabProps {
 
 export default function DetailsTab({ card }: DetailsTabProps) {
   const updateCard = useBoardStore((s) => s.updateCard);
-  const { sendMessage } = useWebSocket();
+  const { sendMessage, sendPlanGenerate, abortPlan } = useWebSocket();
   const [description, setDescription] = useState(card.description);
   const [evalEnvSetup, setEvalEnvSetup] = useState(card.eval_env_setup ?? '');
   const [evalVerification, setEvalVerification] = useState(card.eval_verification ?? '');
+
+  // Plan generation state
+  const workerStatus = useWorkerStore((s) => s.statuses[card.id] ?? 'none');
+  const planStatus = useWorkerStore((s) => s.planStatuses[card.id] ?? 'none');
+  const planStreamingText = useWorkerStore((s) => s.planStreamingText[card.id] ?? '');
+  const isPlanStreaming = useWorkerStore((s) => s.isPlanStreaming[card.id] ?? false);
+  const planError = useWorkerStore((s) => s.planErrors[card.id] ?? '');
+  const [specMd, setSpecMd] = useState<string | null>(null);
+  const [specMdLoading, setSpecMdLoading] = useState(false);
+  const streamingEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch SPEC.md content
+  const fetchSpecMd = useCallback(async () => {
+    setSpecMdLoading(true);
+    try {
+      const res = await apiFetch<{ content: string }>(`/cards/${card.id}/files/read?path=SPEC.md`);
+      setSpecMd(res?.content ?? null);
+    } catch {
+      setSpecMd(null);
+    } finally {
+      setSpecMdLoading(false);
+    }
+  }, [card.id]);
+
+  // Fetch SPEC.md on mount
+  useEffect(() => {
+    fetchSpecMd();
+  }, [fetchSpecMd]);
+
+  // Re-fetch when plan generation completes
+  useEffect(() => {
+    if (planStatus === 'complete') {
+      fetchSpecMd();
+    }
+  }, [planStatus, fetchSpecMd]);
+
+  // Re-fetch when files:changed includes SPEC.md
+  const historyEntries = useHistoryStore((s) => s.entries[card.id] ?? []);
+  const lastFilesChanged = historyEntries.filter((e: Record<string, unknown>) => e.type === 'files_changed').at(-1);
+  useEffect(() => {
+    if (lastFilesChanged) {
+      const files = (lastFilesChanged as Record<string, unknown>).files as string[] | undefined;
+      if (files?.some((f) => f.includes('SPEC.md'))) {
+        fetchSpecMd();
+      }
+    }
+  }, [lastFilesChanged, fetchSpecMd]);
+
+  // Auto-scroll streaming text
+  useEffect(() => {
+    if (isPlanStreaming && streamingEndRef.current) {
+      streamingEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [planStreamingText, isPlanStreaming]);
+
+  const handleGeneratePlan = useCallback(() => {
+    sendPlanGenerate(card.id);
+  }, [sendPlanGenerate, card.id]);
+
+  const handleAbortPlan = useCallback(() => {
+    abortPlan(card.id);
+  }, [abortPlan, card.id]);
+
+  const isWorkerReady = workerStatus === 'idle' || workerStatus === 'running';
+  const isPlanRunning = planStatus === 'running' || isPlanStreaming;
 
   useEffect(() => {
     setDescription(card.description);
@@ -105,6 +173,97 @@ export default function DetailsTab({ card }: DetailsTabProps) {
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
             />
           </div>
+
+          {/* Generate Plan button */}
+          {isWorkerReady && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleGeneratePlan}
+                disabled={isPlanRunning}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isPlanRunning ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Generating Plan...
+                  </>
+                ) : specMd ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Regenerate Plan
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Generate Plan
+                  </>
+                )}
+              </button>
+              {isPlanRunning && (
+                <button
+                  type="button"
+                  onClick={handleAbortPlan}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Abort
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Plan error */}
+          {planStatus === 'error' && planError && (
+            <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-400">
+              {planError}
+            </div>
+          )}
+
+          {/* Streaming preview while generating */}
+          {isPlanStreaming && planStreamingText && (
+            <div className="rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10 max-h-64 overflow-y-auto">
+              <div className="px-3 py-2 border-b border-indigo-200 dark:border-indigo-800 text-xs font-medium text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Claude is exploring the codebase and writing SPEC.md...
+              </div>
+              <div className="p-3 text-sm">
+                <MarkdownContent>{planStreamingText}</MarkdownContent>
+              </div>
+              <div ref={streamingEndRef} />
+            </div>
+          )}
+
+          {/* SPEC.md display */}
+          {!isPlanStreaming && specMd && (
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Plan (SPEC.md)
+              </div>
+              <div className="p-4 text-sm overflow-y-auto max-h-96">
+                <MarkdownContent>{specMd}</MarkdownContent>
+              </div>
+            </div>
+          )}
+
+          {specMdLoading && !isPlanStreaming && !specMd && (
+            <div className="text-sm text-gray-400 dark:text-gray-500">Loading SPEC.md...</div>
+          )}
 
           {/* Sub-tasks */}
           <SubtaskList cardId={card.id} section="spec" />

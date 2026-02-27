@@ -50,6 +50,12 @@ export function setupChatHandler(ws: WebSocket): void {
       case 'pr:create':
         handlePRCreate(ws, msg);
         break;
+      case 'plan:generate':
+        handlePlanGenerate(ws, msg);
+        break;
+      case 'plan:abort':
+        handlePlanAbort(ws, msg);
+        break;
       case 'worker:status':
         handleWorkerStatus(ws, msg);
         break;
@@ -287,6 +293,57 @@ async function handlePRCreate(ws: WebSocket, msg: WsMessage): Promise<void> {
 
   if (!started) {
     ws.send(JSON.stringify({ type: 'pr:error', cardId, error: 'Failed to start PR worker' }));
+  }
+}
+
+function handlePlanGenerate(ws: WebSocket, msg: WsMessage): void {
+  const { cardId } = msg;
+  if (!cardId) {
+    ws.send(JSON.stringify({ type: 'error', error: 'cardId required' }));
+    return;
+  }
+
+  const hasLocalWorker = processManager.hasWorker(cardId);
+  const hasContainerWorker = workerWsManager.hasWorker(cardId, 'card');
+
+  if (!hasLocalWorker && !hasContainerWorker) {
+    ws.send(
+      JSON.stringify({
+        type: 'plan:error',
+        cardId,
+        error: 'No worker running for this card. Move card to "In Progress" first.',
+      })
+    );
+    return;
+  }
+
+  const context = buildCardContext(cardId);
+
+  let sent = false;
+  if (hasContainerWorker) {
+    sent = workerWsManager.sendToWorker(cardId, 'card', { type: 'plan:generate', context });
+  } else {
+    sent = processManager.sendToWorker(cardId, { type: 'plan:generate', context });
+  }
+
+  if (!sent) {
+    ws.send(
+      JSON.stringify({ type: 'plan:error', cardId, error: 'Failed to send plan request to worker' })
+    );
+  }
+}
+
+function handlePlanAbort(ws: WebSocket, msg: WsMessage): void {
+  const { cardId } = msg;
+  if (!cardId) {
+    ws.send(JSON.stringify({ type: 'error', error: 'cardId required' }));
+    return;
+  }
+
+  if (workerWsManager.hasWorker(cardId, 'card')) {
+    workerWsManager.sendToWorker(cardId, 'card', { type: 'plan:abort' });
+  } else {
+    processManager.sendToWorker(cardId, { type: 'plan:abort' });
   }
 }
 

@@ -199,6 +199,16 @@ export class ProcessManager extends EventEmitter {
     return true;
   }
 
+  sendToWorker(cardId: string, msg: Record<string, unknown>): boolean {
+    const worker = this.workers.get(cardId);
+    if (!worker) {
+      console.warn(`[ProcessManager] No worker for card ${cardId}`);
+      return false;
+    }
+    worker.process.send(msg);
+    return true;
+  }
+
   abortWorker(cardId: string): boolean {
     const worker = this.workers.get(cardId);
     if (!worker) return false;

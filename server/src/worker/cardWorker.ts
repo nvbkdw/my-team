@@ -24,6 +24,8 @@ interface CardContext {
 type MainToWorker =
   | { type: 'chat:send'; message: string; context?: CardContext }
   | { type: 'chat:abort' }
+  | { type: 'plan:generate'; context?: CardContext }
+  | { type: 'plan:abort' }
   | { type: 'config:update'; config: Partial<WorkerConfig> }
   | { type: 'eval:result'; cardId: string; filename: string; summary: string; resultFilePath: string }
   | { type: 'shutdown' };
@@ -68,6 +70,12 @@ transport.onMessage = (msg: Record<string, unknown>) => {
       break;
     case 'chat:abort':
       handleChatAbort();
+      break;
+    case 'plan:generate':
+      handlePlanGenerate(typed.context);
+      break;
+    case 'plan:abort':
+      handlePlanAbort();
       break;
     case 'config:update':
       Object.assign(config, typed.config);
@@ -180,6 +188,114 @@ async function handleChatSend(message: string, context?: CardContext): Promise<v
 function handleChatAbort(): void {
   if (claudeRunner.isRunning) {
     claudeRunner.abort();
+    traceLogger.logAbort();
+    traceLogger.logStatusChange('idle');
+    send({ type: 'status', status: 'idle' });
+  }
+}
+
+// ── Plan Generation ──────────────────────────────────
+
+// Separate ClaudeRunner for plan generation so it doesn't conflict with chat session
+const planRunner = new ClaudeRunner({ cwd: config.branchDir, cardId: config.cardId });
+
+function buildPlanPrompt(context?: CardContext): string {
+  const parts: string[] = [];
+  parts.push(`You are in PLAN MODE. Your job is to create a detailed implementation plan.
+Do NOT implement any code changes — only create the plan.`);
+
+  if (context?.description?.trim()) {
+    parts.push(`## Task Specification\n${context.description.trim()}`);
+  }
+
+  if (context?.comments && context.comments.length > 0) {
+    const commentLines = context.comments.map((c) => `[${c.author}] ${c.body}`);
+    parts.push(`## Design Notes\n${commentLines.join('\n')}`);
+  }
+
+  parts.push(`## Instructions
+1. Read and understand the task specification above
+2. Explore the codebase thoroughly — understand architecture, patterns, and relevant code
+3. Create a comprehensive implementation plan
+4. Write the plan to ./SPEC.md
+
+## Required SPEC.md Format
+
+# Implementation Plan: [Brief Title]
+
+## Overview
+[1-2 sentence summary]
+
+## Architecture & Design Decisions
+[Key choices and trade-offs]
+
+## Detailed TODO List
+- [ ] Step 1: [description] (\`path/to/file.ts\`)
+  - [ ] Sub-task details
+- [ ] Step 2: ...
+
+## Files to Modify
+- \`path/to/file.ts\` — what changes
+
+## Testing & Verification
+- How to verify the implementation
+
+IMPORTANT: Write the plan to ./SPEC.md. Do NOT make any code changes.`);
+
+  return parts.join('\n\n');
+}
+
+async function handlePlanGenerate(context?: CardContext): Promise<void> {
+  if (planRunner.isRunning) {
+    send({ type: 'plan:error', error: 'Plan generation is already running' });
+    return;
+  }
+
+  send({ type: 'status', status: 'running' });
+  traceLogger.logStatusChange('running');
+
+  const prompt = buildPlanPrompt(context);
+
+  // Always a fresh session — no resume for plan generation
+  await planRunner.run(prompt, null, (event) => {
+    switch (event.type) {
+      case 'token':
+        send({ type: 'plan:token', text: event.text });
+        break;
+      case 'system_init':
+        send({ type: 'plan:system_init', sessionId: event.sessionId, model: event.model, tools: event.tools });
+        break;
+      case 'assistant_text':
+        send({ type: 'plan:assistant_text', text: event.text });
+        break;
+      case 'tool_use':
+        send({ type: 'plan:tool_use', name: event.name, input: event.input, toolUseId: event.toolUseId });
+        break;
+      case 'tool_result':
+        send({ type: 'plan:tool_result', name: event.name, result: event.result, toolUseId: event.toolUseId });
+        break;
+      case 'result_stats':
+        send({ type: 'plan:result_stats', costUsd: event.costUsd, numTurns: event.numTurns, durationMs: event.durationMs });
+        break;
+      case 'message_complete':
+        send({ type: 'plan:message_complete', content: event.content, costUsd: event.costUsd });
+        send({ type: 'status', status: 'idle' });
+        traceLogger.logStatusChange('idle');
+        break;
+      case 'error':
+        send({ type: 'plan:error', error: event.error });
+        send({ type: 'status', status: 'idle' });
+        traceLogger.logStatusChange('idle');
+        break;
+      case 'exit':
+        break;
+    }
+  });
+}
+
+function handlePlanAbort(): void {
+  if (planRunner.isRunning) {
+    planRunner.abort();
     traceLogger.logAbort();
     traceLogger.logStatusChange('idle');
     send({ type: 'status', status: 'idle' });

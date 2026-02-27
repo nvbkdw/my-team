@@ -341,6 +341,75 @@ function dispatchMessage(msg: Record<string, unknown>) {
       // Lifecycle events — no special handling needed
       break;
 
+    // ── Plan Generation Events ─────────────────────────
+    case 'plan:token':
+      if (cardId) {
+        useWorkerStore.getState().setPlanStreaming(cardId, true);
+        useWorkerStore.getState().appendPlanStreamingText(cardId, msg.text as string);
+      }
+      break;
+
+    case 'plan:message_complete':
+      if (cardId) {
+        useWorkerStore.getState().clearPlanStreaming(cardId);
+        useWorkerStore.getState().setPlanStatus(cardId, 'complete');
+      }
+      break;
+
+    case 'plan:error':
+      if (cardId) {
+        useWorkerStore.getState().clearPlanStreaming(cardId);
+        useWorkerStore.getState().setPlanError(cardId, msg.error as string);
+      }
+      console.warn('[WS] Plan error:', msg.error);
+      break;
+
+    case 'plan:system_init':
+      if (cardId) {
+        useWorkerStore.getState().setPlanStatus(cardId, 'running');
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'plan_system_init',
+          sessionId: msg.sessionId, model: msg.model, tools: msg.tools,
+        });
+      }
+      break;
+
+    case 'plan:assistant_text':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'plan_assistant_text',
+          text: msg.text,
+        });
+      }
+      break;
+
+    case 'plan:tool_use':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'plan_tool_use',
+          name: msg.name, input: msg.input, toolUseId: msg.toolUseId,
+        });
+      }
+      break;
+
+    case 'plan:tool_result':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'plan_tool_result',
+          name: msg.name, result: msg.result, toolUseId: msg.toolUseId,
+        });
+      }
+      break;
+
+    case 'plan:result_stats':
+      if (cardId) {
+        useHistoryStore.getState().appendEntry(cardId, {
+          ts: new Date().toISOString(), run: 0, type: 'plan_run_end',
+          costUsd: msg.costUsd, numTurns: msg.numTurns, durationMs: msg.durationMs,
+        });
+      }
+      break;
+
     case 'pong':
       break;
 
@@ -421,5 +490,19 @@ export function useWebSocket() {
     [sendMessage]
   );
 
-  return { sendChatMessage, abortChat, sendMessage, sendEvalRun, sendPRCreate };
+  const sendPlanGenerate = useCallback(
+    (cardId: string) => {
+      sendMessage('plan:generate', { cardId });
+    },
+    [sendMessage]
+  );
+
+  const abortPlan = useCallback(
+    (cardId: string) => {
+      sendMessage('plan:abort', { cardId });
+    },
+    [sendMessage]
+  );
+
+  return { sendChatMessage, abortChat, sendMessage, sendEvalRun, sendPRCreate, sendPlanGenerate, abortPlan };
 }

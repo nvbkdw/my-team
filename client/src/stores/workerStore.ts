@@ -3,6 +3,7 @@ import { create } from 'zustand';
 type WorkerStatus = 'none' | 'idle' | 'running' | 'error';
 type EvalStatus = 'none' | 'running' | 'complete' | 'error';
 type PRStatus = 'none' | 'running' | 'complete' | 'error';
+type PlanStatus = 'none' | 'running' | 'complete' | 'error';
 
 interface PRStepInfo {
   step: string;
@@ -19,6 +20,10 @@ interface WorkerState {
   prStatuses: Record<string, PRStatus>;
   prSteps: Record<string, PRStepInfo>;
   prErrors: Record<string, string>;
+  planStatuses: Record<string, PlanStatus>;
+  planStreamingText: Record<string, string>;
+  isPlanStreaming: Record<string, boolean>;
+  planErrors: Record<string, string>;
 
   setWorkerStatus: (cardId: string, status: WorkerStatus, error?: string) => void;
   setAllStatuses: (statuses: Record<string, { status: string }>) => void;
@@ -33,6 +38,11 @@ interface WorkerState {
   setPRStep: (cardId: string, step: string, message: string) => void;
   setPRError: (cardId: string, error: string) => void;
   clearPRState: (cardId: string) => void;
+  setPlanStatus: (cardId: string, status: PlanStatus) => void;
+  setPlanStreaming: (cardId: string, val: boolean) => void;
+  appendPlanStreamingText: (cardId: string, text: string) => void;
+  clearPlanStreaming: (cardId: string) => void;
+  setPlanError: (cardId: string, error: string) => void;
 }
 
 export const useWorkerStore = create<WorkerState>((set, get) => ({
@@ -45,6 +55,10 @@ export const useWorkerStore = create<WorkerState>((set, get) => ({
   prStatuses: {},
   prSteps: {},
   prErrors: {},
+  planStatuses: {},
+  planStreamingText: {},
+  isPlanStreaming: {},
+  planErrors: {},
 
   setWorkerStatus: (cardId: string, status: WorkerStatus, error?: string) => {
     set((s) => ({
@@ -146,5 +160,41 @@ export const useWorkerStore = create<WorkerState>((set, get) => ({
       const { [cardId]: _e, ...restErrors } = s.prErrors;
       return { prStatuses: restStatuses, prSteps: restSteps, prErrors: restErrors };
     });
+  },
+
+  setPlanStatus: (cardId: string, status: PlanStatus) => {
+    set((s) => ({
+      planStatuses: { ...s.planStatuses, [cardId]: status },
+    }));
+  },
+
+  setPlanStreaming: (cardId: string, val: boolean) => {
+    set((s) => ({
+      isPlanStreaming: { ...s.isPlanStreaming, [cardId]: val },
+      ...(val ? { planStreamingText: { ...s.planStreamingText, [cardId]: '' } } : {}),
+    }));
+  },
+
+  appendPlanStreamingText: (cardId: string, text: string) => {
+    set((s) => ({
+      planStreamingText: {
+        ...s.planStreamingText,
+        [cardId]: (s.planStreamingText[cardId] || '') + text,
+      },
+    }));
+  },
+
+  clearPlanStreaming: (cardId: string) => {
+    set((s) => ({
+      planStreamingText: { ...s.planStreamingText, [cardId]: '' },
+      isPlanStreaming: { ...s.isPlanStreaming, [cardId]: false },
+    }));
+  },
+
+  setPlanError: (cardId: string, error: string) => {
+    set((s) => ({
+      planErrors: { ...s.planErrors, [cardId]: error },
+      planStatuses: { ...s.planStatuses, [cardId]: 'error' },
+    }));
   },
 }));
